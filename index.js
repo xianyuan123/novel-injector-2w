@@ -230,6 +230,12 @@ function niCurrentVectorChunkChars() {
         DEFAULT_SETTINGS.vecChunkChars,
     );
 }
+// 设置页里的非负整数输入统一走这里：空值/非法值回退默认，超出范围夹紧。
+function niNormalizeRecallIntInput(raw, fallback, { min = 0, max = 200 } = {}) {
+    const parsed = parseInt(raw, 10);
+    const base = Number.isFinite(parsed) ? parsed : (parseInt(fallback, 10) || 0);
+    return Math.min(max, Math.max(min, base));
+}
 // 通过 Error stack trace 获取当前模块的实际路径
 function _detectExtFolder() {
     try {
@@ -262,6 +268,11 @@ const DEFAULT_SETTINGS = {
     vecInjMaxTokens: NI_VEC_INJECTION_MAX_TOKENS_DEFAULT,
     // 向量块切分大小（字符）。改动后需要重新向量化，旧索引仍按原切分检索。
     vecChunkChars: NI_VEC_CHUNK_CHARS_DEFAULT,
+    // 保底召回片段数。相似度达不到阈值时，按分数从高到低继续补足到这个数量，
+    // 上限仍受「单轮最多 Token」约束。0 = 关闭，只按阈值卡。
+    vecKeepTopN: 0,
+    // 前情最多召回几个片段。0 = 不要前情。
+    vecHistoryTopK: 2,
     vecMsgTag: '',       // 消息内容标签，留空=完整消息，有值则只提取该标签内文字
     vecMsgCount: 3,      // 召回时取近几条消息
     // 角色人设注入设置
@@ -729,6 +740,16 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
         q('#ni-vec-chunk-chars')?.value,
         cfg.vecChunkChars ?? DEFAULT_SETTINGS.vecChunkChars,
     );
+    cfg.vecKeepTopN = niNormalizeRecallIntInput(
+        q('#ni-vec-keep-topn')?.value,
+        cfg.vecKeepTopN ?? DEFAULT_SETTINGS.vecKeepTopN,
+        { min: 0, max: 200 },
+    );
+    cfg.vecHistoryTopK = niNormalizeRecallIntInput(
+        q('#ni-vec-history-topk')?.value,
+        cfg.vecHistoryTopK ?? DEFAULT_SETTINGS.vecHistoryTopK,
+        { min: 0, max: 50 },
+    );
     cfg.vecMsgTag   = (q('#ni-vec-msg-tag')?.value || '').trim();
     cfg.vecMsgCount = parseInt(q('#ni-vec-msg-count')?.value) || DEFAULT_SETTINGS.vecMsgCount;
     cfg.charInjPos  = parseInt(q('#ni-char-inj-pos')?.value) ?? DEFAULT_SETTINGS.charInjPos;
@@ -1010,6 +1031,16 @@ function syncSettingsToUI() {
     sv('#ni-vec-chunk-chars', niNormalizeVectorChunkChars(
         cfg.vecChunkChars,
         DEFAULT_SETTINGS.vecChunkChars,
+    ));
+    sv('#ni-vec-keep-topn', niNormalizeRecallIntInput(
+        cfg.vecKeepTopN,
+        DEFAULT_SETTINGS.vecKeepTopN,
+        { min: 0, max: 200 },
+    ));
+    sv('#ni-vec-history-topk', niNormalizeRecallIntInput(
+        cfg.vecHistoryTopK,
+        DEFAULT_SETTINGS.vecHistoryTopK,
+        { min: 0, max: 50 },
     ));
     sv('#ni-vec-msg-tag',  cfg.vecMsgTag   ?? DEFAULT_SETTINGS.vecMsgTag);
     sv('#ni-vec-msg-count', cfg.vecMsgCount ?? DEFAULT_SETTINGS.vecMsgCount);
@@ -3382,7 +3413,9 @@ async function onPromptReady(eventData) {
                     lightRecallContext,
                     nodeRecallContext,
                     historicalStages: vectorRecallScope.historicalStages,
-                    historyTopK: 2,
+                    historyTopK: extension_settings[EXT_NAME]?.vecHistoryTopK ?? DEFAULT_SETTINGS.vecHistoryTopK,
+                    // 相似度不达标时按分数补足到「保底召回片段数」，仍受 Token 预算约束。
+                    keepTopN: extension_settings[EXT_NAME]?.vecKeepTopN ?? DEFAULT_SETTINGS.vecKeepTopN,
                     splitSections: true,
                     keywordTerms,
                     // 非穿书模式没有当前节点可锚定，让召回自己从得分分布反推当前阶段。
@@ -3983,7 +4016,7 @@ jQuery(async () => {
         const body = document.getElementById('ni-inj-body');
         if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
     });
-    $app.on('input change', '#ni-inj-depth, #ni-recall-topk, #ni-recall-thresh, #ni-vec-inj-max-tokens, #ni-vec-chunk-chars, #ni-vec-msg-tag, #ni-vec-msg-count, #ni-vec-inj-pos, #ni-vec-inj-role, #ni-char-inj-pos, #ni-char-inj-depth, #ni-char-inj-role, #ni-plot-inj-pos, #ni-plot-inj-depth, #ni-plot-inj-role, #ni-plot-inj-max-tokens, #ni-dev-inj-pos, #ni-dev-inj-depth, #ni-dev-inj-role, #ni-global-head-inj-pos, #ni-global-head-inj-depth, #ni-global-head-inj-role, #ni-global-tail-inj-pos, #ni-global-tail-inj-depth, #ni-global-tail-inj-role', () => niSaveSettings());
+    $app.on('input change', '#ni-inj-depth, #ni-recall-topk, #ni-recall-thresh, #ni-vec-inj-max-tokens, #ni-vec-chunk-chars, #ni-vec-keep-topn, #ni-vec-history-topk, #ni-vec-msg-tag, #ni-vec-msg-count, #ni-vec-inj-pos, #ni-vec-inj-role, #ni-char-inj-pos, #ni-char-inj-depth, #ni-char-inj-role, #ni-plot-inj-pos, #ni-plot-inj-depth, #ni-plot-inj-role, #ni-plot-inj-max-tokens, #ni-dev-inj-pos, #ni-dev-inj-depth, #ni-dev-inj-role, #ni-global-head-inj-pos, #ni-global-head-inj-depth, #ni-global-head-inj-role, #ni-global-tail-inj-pos, #ni-global-tail-inj-depth, #ni-global-tail-inj-role', () => niSaveSettings());
     $app.on('input change', '#ni-plot-inj-max-tokens', () => niUpdateStageInjectionBudgetNote());
     $app.on('input change', '#ni-raw-inj-mode', async function() {
         const cfg = extension_settings[EXT_NAME] || {};

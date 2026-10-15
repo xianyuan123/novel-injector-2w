@@ -475,7 +475,7 @@
             </div>
             <div class="ni-inj-row" style="margin-top:8px">
               <div class="ni-field" style="margin-bottom:0">
-                <label title="单轮最多取多少个向量片段。&#10;&#10;这个值和「单轮最多 Token」共同决定实际注入量：片段数先卡一道，再按 Token 预算逐块累加，谁先到谁生效。&#10;&#10;举例：每块 1000 字（≈667 Token）时，必须取到 30 块才能填满 20000 Token。默认 30（上限 60）。">最多召回片段数</label>
+                <label title="一次最多取多少个向量片段（及格线以上的片段）。&#10;&#10;这个值和「单轮最多 Token」「保底召回片段数」共同决定实际注入量：&#10;· 片段数先在这个值和保底召回数之间取大的那个；&#10;· 再按 Token 预算逐块累加，装不下就丢掉排在最后的块。&#10;&#10;举例：每块 1000 字（≈667 Token）时，取到 30 块才够填满 20000 Token。默认 30（上限 60）。">最多召回片段数</label>
                 <input type="number" id="ni-recall-topk" value="30" min="1" max="60">
               </div>
               <div class="ni-field" style="margin-bottom:0">
@@ -493,6 +493,17 @@
                 <input type="number" id="ni-vec-chunk-chars" value="1000" min="200" max="4000" step="100">
               </div>
               <div></div>
+              <div></div>
+            </div>
+            <div class="ni-inj-row" style="margin-top:8px">
+              <div class="ni-field" style="margin-bottom:0">
+                <label title="相似度阈值是及格线，不是名额。这项用来保证「要多少块就能拿到多少块」。&#10;&#10;实际取块数 = max(最多召回片段数, 本项)，再受「单轮最多 Token」预算裁剪。&#10;· 0 = 关闭：只取及格的块（及格几个就几个），这是默认行为。&#10;· 设为 40 = 至少凑到 40 块：及格的块优先，不够就按相似度从高到低把不及格的也补进来。&#10;&#10;注意：补进来的块相似度偏低，可能夹带无关内容，而且会明显增加每轮消耗。&#10;想「设了 40 就真的拿到 40 块」，把本项和「最多召回片段数」都设成 40，再把 Token 预算调到 30000 以上。">保底召回片段数</label>
+                <input type="number" id="ni-vec-keep-topn" value="0" min="0" max="200">
+              </div>
+              <div class="ni-field" style="margin-bottom:0">
+                <label title="前情池（更早阶段）单独的名额，与「最多召回片段数」互不占用。&#10;&#10;0 = 不注入前情。默认 2。">前情最多召回片段数</label>
+                <input type="number" id="ni-vec-history-topk" value="2" min="0" max="50">
+              </div>
               <div></div>
             </div>
           </div>
