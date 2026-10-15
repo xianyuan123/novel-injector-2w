@@ -256,7 +256,7 @@ const DEFAULT_SETTINGS = {
     injDepth: 4,
     vecInjPos: 1,   // 0=主提示后 1=聊天内 2=主提示前
     vecInjRole: 0,  // 0=system 1=user 2=assistant
-    recallTopK: 12,
+    recallTopK: 30,
     recallThresh: 0.5,
     // 向量块单轮注入上限（Token）。默认两万，按长度累加召回片段，装不下就停。
     vecInjMaxTokens: NI_VEC_INJECTION_MAX_TOKENS_DEFAULT,

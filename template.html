@@ -475,8 +475,8 @@
             </div>
             <div class="ni-inj-row" style="margin-top:8px">
               <div class="ni-field" style="margin-bottom:0">
-                <label title="单轮最多取多少个向量片段。&#10;&#10;这个值和「单轮最多 Token」共同决定实际注入量：片段数先卡一道，再按 Token 预算逐块累加，谁先到谁生效。&#10;&#10;举例：每块 1000 字（≈667 Token）时，必须取到 30 块才能填满 20000 Token。默认 12（上限 30）。">最多召回片段数</label>
-                <input type="number" id="ni-recall-topk" value="12" min="1" max="30">
+                <label title="单轮最多取多少个向量片段。&#10;&#10;这个值和「单轮最多 Token」共同决定实际注入量：片段数先卡一道，再按 Token 预算逐块累加，谁先到谁生效。&#10;&#10;举例：每块 1000 字（≈667 Token）时，必须取到 30 块才能填满 20000 Token。默认 30（上限 60）。">最多召回片段数</label>
+                <input type="number" id="ni-recall-topk" value="30" min="1" max="60">
               </div>
               <div class="ni-field" style="margin-bottom:0">
                 <label>向量相似度阈值</label>
