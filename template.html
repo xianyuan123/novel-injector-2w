@@ -1395,7 +1395,7 @@
             <textarea id="ni-stage-pt-content" class="ni-pt-textarea" spellcheck="false"></textarea>
           </div>
         </div>
-        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按右侧「未向量注入」模式注入；关闭 → 完全跳过。</div>
+        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按右侧「未向量注入」模式注入；关闭 → 完全跳过。开启「当前阶段全量直注」后，当前阶段整段直注，更早阶段仍按向量召回。</div>
         <div class="ni-stage-bulk-row">
           <div class="ni-stage-inj-mode-wrap">
             <label class="ni-stage-inj-mode-lbl">未向量注入</label>
@@ -1404,9 +1404,11 @@
               <option value="compressed">压缩原文</option>
             </select>
           </div>
+          <button class="ni-bulk-btn off" id="ni-stage-full-inject" role="switch" aria-checked="false" title="当前阶段整段直注：不裁剪、不召回，把当前阶段的剧情节点（或压缩原文）整段注入。更早的阶段仍然按向量语义召回。"><i class="ti ti-arrow-bar-to-down"></i>当前阶段全量直注</button>
           <button class="ni-bulk-btn on" id="ni-stage-enable-all" title="开启所有阶段"><i class="ti ti-check"></i>全部开启</button>
           <button class="ni-bulk-btn off" id="ni-stage-disable-all" title="关闭所有阶段"><i class="ti ti-x"></i>全部关闭</button>
         </div>
+        <div class="ni-stage-full-inject-note" id="ni-stage-full-inject-note"></div>
         <div class="ni-stage-budget-note" id="ni-stage-inj-budget-note" style="display:none">未向量阶段单轮注入上限：32000 Token</div>
         <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
           <label class="ni-pagination-size">每 <input type="number" id="ni-stage-page-size" value="20" min="1" max="200" step="1" aria-label="每页阶段数"> 一页</label>

@@ -42,16 +42,19 @@ import {
 import { createAutosaveController } from './lib/autosave-system.js';
 
 import {
+    NI_FULL_STAGE_INJECTION_MAX_TOKENS,
     NI_RAW_INJECTION_MAX_TOKENS_DEFAULT,
     NI_VEC_CHUNK_CHARS_DEFAULT,
     NI_VEC_INJECTION_MAX_TOKENS_DEFAULT,
     niBuildStageInjectionPayload,
+    niIsFullStageInjectionEnabled,
     niIsVectorInjectionDisabledByUser,
     niNormalizeRawInjectionMaxTokens,
     niNormalizeVectorChunkChars,
     niNormalizeVectorInjectionMaxTokens,
     niNormalizeVectorInjectionPreference,
     niResolveDirectStageInjectionStages,
+    niResolveFullStageInjectionPlan,
     niBuildTransbookStageDetailText,
     niResolvePausedTransbookPromptSlots,
     niResolveStageInjectionPlan,
@@ -340,6 +343,7 @@ const DEFAULT_SETTINGS = {
     themeDeletedPresetIds: [],
     vecInjDisabled: false, // 有向量数据但用户选择不调用向量注入
     vecInjDisabledByUser: false, // 仅用户主动点击关闭时为 true；旧设置残留不能屏蔽向量
+    curStageFullInject: false, // 当前阶段整段直注（不召回、不按单轮上限裁剪），更早阶段仍走向量召回
     tbRestoreAfterPluginEnable: false,
     novelLibrary: [],     // 小说快照库 [{name, key, snapshot}]
     // 世界设定注入设置
@@ -890,14 +894,28 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
         paused: !!S.tbPaused,
     });
 
+    // 「当前阶段全量直注」：把当前阶段从向量召回挪进整段直注，更早阶段继续走召回。
+    const fullStagePlan = niResolveFullStageInjectionPlan({
+        plan: {
+            enabledStages,
+            directStageInjectionStages,
+        },
+        vectorRecallScope,
+        enabled: niIsFullStageInjectionEnabled(cfg),
+        currentStageIdx: directStageCurrentIdx,
+    });
+
     return {
         enabledStages,
         rawStages,
         vectorInjectionDisabled,
         curTbNode,
-        vectorRecallScope,
+        vectorRecallScope: fullStagePlan.vectorRecallScope,
         directStageCurrentIdx,
-        directStageInjectionStages,
+        directStageInjectionStages: fullStagePlan.directStageInjectionStages,
+        fullStageInjectionEnabled: fullStagePlan.fullInjectEnabled,
+        fullStageInjectionStageIdx: fullStagePlan.fullInjectStageIdx,
+        fullStageInjectionApplied: fullStagePlan.fullInjectApplied,
     };
 }
 
@@ -913,6 +931,8 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
         currentStageIdx: plan.directStageCurrentIdx,
         maxTokens,
         rawMode,
+        // 当前阶段整段直注时换用宽预算，不拿「未向量阶段单轮上限」裁剪它。
+        fullInject: plan.fullStageInjectionApplied === true,
         getDetailText: si => {
             const getCompressedChunkText = ci => (S.chunkResults[ci] && S.chunkResults[ci].trim())
                 ? S.chunkResults[ci]
@@ -992,9 +1012,14 @@ function niUpdateStageInjectionBudgetNote(result = null, {
     if (omittedCount) parts.push(`${omittedCount} 个阶段因超出上限未注入`);
     if (emptyCount) parts.push(`${emptyCount} 个阶段无可用内容`);
     if (displayResult.truncated === true) parts.push('当前阶段内容已按上限截断');
+    // 整段直注时「单轮最多 Token」不参与裁剪，上限说明要跟着换，否则会误导。
+    const effectiveMaxTokens = displayResult.fullInject === true
+        ? niNormalizeRawInjectionMaxTokens(NI_FULL_STAGE_INJECTION_MAX_TOKENS)
+        : maxTokens;
+    if (displayResult.fullInject === true) parts.push('当前阶段整段直注');
     const limitSuffix = cfg.transBookMode
         ? ''
-        : `（上限 ${maxTokens.toLocaleString()}）`;
+        : `（上限 ${effectiveMaxTokens.toLocaleString()}）`;
     note.textContent = `${parts.join('，')}${limitSuffix}`;
     note.classList.toggle('ni-stage-budget-warning', omittedCount > 0 || displayResult.truncated === true);
 }
@@ -1056,6 +1081,7 @@ function syncSettingsToUI() {
     sv('#ni-stage-page-size', cfg.stagePageSize ?? DEFAULT_SETTINGS.stagePageSize);
     sv('#ni-lib-page-size', cfg.novelLibraryPageSize ?? DEFAULT_SETTINGS.novelLibraryPageSize);
     niUpdateStageInjectionBudgetNote();
+    niUpdateStageFullInjectUI();
     sv('#ni-dev-inj-pos', cfg.devInjPos  ?? DEFAULT_SETTINGS.devInjPos);
     sv('#ni-dev-inj-depth',cfg.devInjDepth?? DEFAULT_SETTINGS.devInjDepth);
     sv('#ni-dev-inj-role',cfg.devInjRole ?? DEFAULT_SETTINGS.devInjRole);
@@ -2984,19 +3010,77 @@ function niPostprocessUserSubMessage(messageId) {
     }
 }
 
+function niUpdateStageFullInjectUI(precomputedPlan = null, precomputedUiState = null) {
+    const btn = q('#ni-stage-full-inject');
+    const note = q('#ni-stage-full-inject-note');
+    const cfg = extension_settings[EXT_NAME] || {};
+    const plan = precomputedPlan || niResolveStageInjectionExecutionPlan(cfg);
+    const uiState = precomputedUiState || niResolveStageInjectionUiState({
+        stageCount: S.stageMapN,
+        stageStates: S.stageStates,
+        stageVecDone: S.stageVecDone,
+        vecDone: S.vecDone,
+        vecInjDisabled: niIsVectorInjectionDisabledByUser(cfg),
+        fullInjectEnabled: plan.fullStageInjectionEnabled,
+        fullInjectStageIdx: plan.fullStageInjectionStageIdx,
+        fullInjectApplied: plan.fullStageInjectionApplied,
+    });
+    const enabled = plan.fullStageInjectionEnabled === true;
+    const applied = plan.fullStageInjectionApplied === true;
+    const stageIdx = plan.fullStageInjectionStageIdx;
+
+    // 只有在「有向量数据」时这个开关才有意义：没有向量的时候未开启阶段本来就会整段直注。
+    if (btn) {
+        btn.style.display = uiState.hasAnyVector ? '' : 'none';
+        btn.classList.toggle('on', enabled);
+        btn.classList.toggle('off', !enabled);
+        btn.setAttribute('aria-checked', enabled ? 'true' : 'false');
+        btn.title = enabled
+            ? (applied
+                ? `当前阶段（第 ${stageIdx} 阶段）整段直注已生效：该阶段不裁剪、不召回，更早阶段仍按向量语义召回。点击关闭。`
+                : '当前阶段整段直注已开启，但当前生效的阶段还没有开启，暂不生效。点击关闭。')
+            : '当前阶段整段直注：不裁剪、不召回，把当前阶段的剧情节点（或压缩原文）整段注入。更早的阶段仍然按向量语义召回。';
+    }
+
+    if (!note) return;
+    if (!uiState.hasAnyVector) {
+        note.style.display = 'none';
+        note.textContent = '';
+        note.className = 'ni-stage-full-inject-note';
+        return;
+    }
+    note.style.display = '';
+    const fullInjectTokens = niNormalizeRawInjectionMaxTokens(NI_FULL_STAGE_INJECTION_MAX_TOKENS);
+    if (applied) {
+        note.className = 'ni-stage-full-inject-note ni-active';
+        note.textContent = `已开启：第 ${stageIdx} 阶段整段直注（不召回、不按「单轮最多 Token」裁剪，兜底上限 ${fullInjectTokens} Token），更早的阶段仍然向量召回。`;
+    } else if (enabled) {
+        note.className = 'ni-stage-full-inject-note ni-idle';
+        note.textContent = '已开启，但当前生效的阶段还没有开启（被「关闭」的阶段不参与注入），所以暂时不生效。开启当前阶段后即可整段直注。';
+    } else {
+        note.className = 'ni-stage-full-inject-note';
+        note.textContent = '开启后：当前阶段整段直注（更完整，但每轮上下文占用更高），更早阶段仍然向量召回。';
+    }
+}
+
 function niUpdateVecOffBtn() {
     const btn = q('#ni-vec-off-btn');
     const modeWrap = q('.ni-stage-inj-mode-wrap');
     const cfg = extension_settings[EXT_NAME] || {};
     const vectorInjectionDisabled = niIsVectorInjectionDisabledByUser(cfg);
+    const plan = niResolveStageInjectionExecutionPlan(cfg);
     const uiState = niResolveStageInjectionUiState({
         stageCount: S.stageMapN,
         stageStates: S.stageStates,
         stageVecDone: S.stageVecDone,
         vecDone: S.vecDone,
         vecInjDisabled: vectorInjectionDisabled,
+        fullInjectEnabled: plan.fullStageInjectionEnabled,
+        fullInjectStageIdx: plan.fullStageInjectionStageIdx,
+        fullInjectApplied: plan.fullStageInjectionApplied,
     });
     niUpdateStageInjectionBudgetNote();
+    niUpdateStageFullInjectUI(plan, uiState);
     // 无向量数据时隐藏按钮，始终显示未向量注入模式选择器
     if (!uiState.hasAnyVector) {
         if (btn) btn.style.display = 'none';
@@ -3864,6 +3948,14 @@ jQuery(async () => {
     $app.on('click', '#ni-vec-off-btn', () => {
         const cfg = extension_settings[EXT_NAME];
         niSetVectorInjectionDisabledByUser(cfg, !niIsVectorInjectionDisabledByUser(cfg));
+        niSaveSettings();
+        niUpdateVecOffBtn();
+    });
+    // 当前阶段全量直注：开着向量化玩当前阶段时，把当前阶段整段注入，更早阶段仍走召回。
+    $app.on('click', '#ni-stage-full-inject', () => {
+        if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
+        const cfg = extension_settings[EXT_NAME];
+        cfg.curStageFullInject = !niIsFullStageInjectionEnabled(cfg);
         niSaveSettings();
         niUpdateVecOffBtn();
     });

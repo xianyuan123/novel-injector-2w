@@ -2636,11 +2636,32 @@ select.ni-modal-input {
 
 /* 全开/全关*/
 .ni-stage-bulk-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-#ni-stage-enable-all { margin-left: auto; }
+#ni-stage-full-inject { margin-left: auto; }
+#ni-stage-enable-all { margin-left: 0; }
 #ni-vec-off-btn { margin-left: auto; }
 .ni-stage-inj-mode-wrap { display: flex; align-items: center; gap: 4px; margin-left: 4px; }
 .ni-stage-inj-mode-lbl { font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; }
 .ni-stage-inj-mode-sel { font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-primary); cursor: pointer; }
+.ni-stage-full-inject-note {
+  margin: -4px 0 10px;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 6px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  border-left: 3px solid var(--color-border-secondary);
+}
+.ni-stage-full-inject-note.ni-active {
+  background: var(--ni-success-soft, #E1F5EE);
+  color: var(--ni-success-text, #0F6E56);
+  border-left-color: var(--ni-success-text, #0F6E56);
+}
+.ni-stage-full-inject-note.ni-idle {
+  background: var(--ni-warning-soft, #FDE8EA);
+  color: var(--ni-warning-text, #C05A62);
+  border-left-color: var(--ni-warning-text, #C05A62);
+}
 .ni-bulk-btn {
   display: flex; align-items: center; gap: 2px;
   padding: 2px 5px; font-size: 11px; font-weight: 500;
