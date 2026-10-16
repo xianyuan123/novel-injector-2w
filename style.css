@@ -1370,6 +1370,9 @@
 .ni-block-btn { font-size: 11px; padding: 2px 8px; white-space: nowrap; background: var(--color-background-primary, #fff); color: var(--color-text-secondary); border: .5px solid var(--color-border-tertiary); }
 .ni-block-btn:hover { opacity: .8; }
 .ni-block-btn.on { background: var(--ni-success-soft, #E1F5EE); color: var(--ni-success-text, #0F6E56); }
+.ni-bulk-btn .ti { font-size: 12px; }
+/* 多选阶段工具条上的「解除勾选的阶段屏蔽」态：与屏蔽态区分开，避免误以为又要屏蔽。 */
+.ni-block-btn.unblock { background: var(--color-background-primary, #fff); color: var(--ni-primary, #A0445E); border-color: var(--ni-primary, #A0445E); }
 .ni-pin-block-chk { flex-shrink: 0; margin: 0 2px 0 0; cursor: pointer; }
 /* 全局「一键屏蔽之前阶段 / 多选阶段」工具条 */
 .ni-stage-block-bar {
