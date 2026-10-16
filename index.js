@@ -124,6 +124,7 @@ import {
     niMergeStageNodes,
     niBuildBlockedRecallContext,
     niBuildStageBlockedNodeFilter,
+    niExcludeBlockedStageIndices,
     niNormalizeRecallBlockFlags,
     niPlotNodeId,
     niNormalizeDeviationSections,
@@ -951,8 +952,14 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
         ? plan.blockedRecallContext
         : null;
     const blockedChunkIdxs = plan.blockedRecallChunkIdxs || [];
+    // 被整段屏蔽的阶段从这里就摘掉，而不是只靠在 getDetailText 里返回空串：
+    // 空正文会走「摘要兜底」分支，把该阶段的概括照样注入出去（漏网）。
+    const stageIndices = niExcludeBlockedStageIndices(
+        plan.directStageInjectionStages,
+        blockedRecallContext,
+    );
     const payload = niBuildStageInjectionPayload({
-        stageIndices: plan.directStageInjectionStages,
+        stageIndices,
         currentStageIdx: plan.directStageCurrentIdx,
         maxTokens,
         rawMode,
