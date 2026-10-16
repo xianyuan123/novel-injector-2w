@@ -56,6 +56,7 @@ import {
     niResolveDirectStageInjectionStages,
     niResolveFullStageInjectionPlan,
     niBuildTransbookStageDetailText,
+    niBuildTransbookWholeStageDetailText,
     niResolvePausedTransbookPromptSlots,
     niResolveStageInjectionPlan,
     niSetVectorInjectionDisabledByUser,
@@ -926,18 +927,33 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
         cfg.plotInjMaxTokens,
         DEFAULT_SETTINGS.plotInjMaxTokens,
     );
-    return niBuildStageInjectionPayload({
+    // 整阶段全量直注时，穿书模式也必须发「整个阶段」，不能收紧成当前节点一个。
+    const fullInjectActive = plan.fullStageInjectionApplied === true;
+    plan.fullStageInjectionWholeStageSent = false;
+    const payload = niBuildStageInjectionPayload({
         stageIndices: plan.directStageInjectionStages,
         currentStageIdx: plan.directStageCurrentIdx,
         maxTokens,
         rawMode,
         // 当前阶段整段直注时换用宽预算，不拿「未向量阶段单轮上限」裁剪它。
-        fullInject: plan.fullStageInjectionApplied === true,
+        fullInject: fullInjectActive,
         getDetailText: si => {
             const getCompressedChunkText = ci => (S.chunkResults[ci] && S.chunkResults[ci].trim())
                 ? S.chunkResults[ci]
                 : (S.chunks[ci] || '');
-            // 穿书模式只发当前正在进行的那个节点；阶段里排在它后面的还没演到。
+            if (fullInjectActive) {
+                // 整阶段直注要在穿书模式下发「这个阶段的全部节点」，不能收紧成当前节点。
+                const wholeStageText = niBuildTransbookWholeStageDetailText(si, {
+                    rawMode,
+                    getCompressedChunkText,
+                    runtimeIndex,
+                });
+                if (wholeStageText) {
+                    plan.fullStageInjectionWholeStageSent = true;
+                    return wholeStageText;
+                }
+            }
+            // 普通穿书模式只发当前正在进行的那个节点；阶段里排在它后面的还没演到。
             const tbDetail = niBuildTransbookStageDetailText(si, plan.curTbNode, {
                 rawMode,
                 getCompressedChunkText,
@@ -963,6 +979,7 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
             return summary ? `【第 ${si} 阶段概括】\n${summary}` : '';
         },
     });
+    return payload;
 }
 
 function niBuildStageInjectionBudgetPreview() {
@@ -970,6 +987,23 @@ function niBuildStageInjectionBudgetPreview() {
     const plan = niResolveStageInjectionExecutionPlan(cfg);
     if (!plan.directStageInjectionStages.length) return null;
     return niBuildStageInjectionPayloadForPlan(plan, cfg);
+}
+
+/**
+ * 本轮是否已经把「当前阶段整阶段剧情」注入出去了？
+ *
+ * 是的话，穿书模式的「持续提示词」就不能再注入一次当前节点——它里面的
+ * {B_BODY} 正是同一段节点正文，用户会看到同一段剧情进两次。
+ * 计划对象在 onPromptReady 里解析、在 CHAT_COMPLETION_PROMPT_READY 监听里复用，
+ * 所以这里重新解析一次拿到同一份判定，不额外保存全局状态。
+ */
+function niTbFullStageInjectionCoversCurrentNode() {
+    if (!extension_settings[EXT_NAME]?.transBookMode) return false;
+    const cfg = extension_settings[EXT_NAME] || {};
+    if (!niIsFullStageInjectionEnabled(cfg)) return false;
+    const plan = niResolveStageInjectionExecutionPlan(cfg);
+    return plan.fullStageInjectionApplied === true
+        && plan.fullStageInjectionWholeStageSent === true;
 }
 
 function niUpdateStageInjectionBudgetNote(result = null, {
@@ -3037,9 +3071,9 @@ function niUpdateStageFullInjectUI(precomputedPlan = null, precomputedUiState = 
         btn.setAttribute('aria-checked', enabled ? 'true' : 'false');
         btn.title = enabled
             ? (applied
-                ? `当前阶段（第 ${stageIdx} 阶段）整段直注已生效：该阶段不裁剪、不召回，更早阶段仍按向量语义召回。点击关闭。`
+                ? `当前阶段（第 ${stageIdx} 阶段）整段直注已生效：该阶段不裁剪、不召回，更早阶段仍按向量语义召回。${cfg.transBookMode ? '穿书模式的当前节点持续提示词已暂停，不会重复注入。' : ''}点击关闭。`
                 : '当前阶段整段直注已开启，但当前生效的阶段还没有开启，暂不生效。点击关闭。')
-            : '当前阶段整段直注：不裁剪、不召回，把当前阶段的剧情节点（或压缩原文）整段注入。更早的阶段仍然按向量语义召回。';
+            : `当前阶段整段直注：不裁剪、不召回，把当前阶段的整段剧情节点（或压缩原文）注入。更早的阶段仍然按向量语义召回。${cfg.transBookMode ? '开启后穿书模式的当前节点持续提示词会暂停，避免同一段剧情注入两次。' : ''}`;
     }
 
     if (!note) return;
@@ -3051,15 +3085,19 @@ function niUpdateStageFullInjectUI(precomputedPlan = null, precomputedUiState = 
     }
     note.style.display = '';
     const fullInjectTokens = niNormalizeRawInjectionMaxTokens(NI_FULL_STAGE_INJECTION_MAX_TOKENS);
+    // 穿书模式本来就会自己注入「当前节点」，所以要额外说明整阶段直注会接管它，避免重复。
+    const tbSuffix = cfg.transBookMode
+        ? '穿书模式下的「当前节点」持续提示词会随之暂停，避免同一段剧情注入两次。'
+        : '';
     if (applied) {
         note.className = 'ni-stage-full-inject-note ni-active';
-        note.textContent = `已开启：第 ${stageIdx} 阶段整段直注（不召回、不按「单轮最多 Token」裁剪，兜底上限 ${fullInjectTokens} Token），更早的阶段仍然向量召回。`;
+        note.textContent = `已开启：第 ${stageIdx} 阶段整段直注（该阶段全部剧情、不召回、不按「单轮最多 Token」裁剪，兜底上限 ${fullInjectTokens} Token），更早的阶段仍然向量召回。${tbSuffix}`;
     } else if (enabled) {
         note.className = 'ni-stage-full-inject-note ni-idle';
         note.textContent = '已开启，但当前生效的阶段还没有开启（被「关闭」的阶段不参与注入），所以暂时不生效。开启当前阶段后即可整段直注。';
     } else {
         note.className = 'ni-stage-full-inject-note';
-        note.textContent = '开启后：当前阶段整段直注（更完整，但每轮上下文占用更高），更早阶段仍然向量召回。';
+        note.textContent = `开启后：当前阶段整段剧情直注（更完整，但每轮上下文占用更高），更早阶段仍然向量召回。${tbSuffix}`;
     }
 }
 
@@ -5215,6 +5253,11 @@ jQuery(document).ready(function () {
             }
 
             // ── 持续提示词：每条消息都注入 ───────────────────────
+            // 但「当前阶段全量直注」已经把整个阶段的剧情发出去时，持续提示词里的
+            // {B_BODY} 就是同一段节点正文，会注入第二次——这时跳过持续提示词。
+            if (niTbFullStageInjectionCoversCurrentNode()) {
+                return;
+            }
             // 节点必须走归档进度推导（niTbGetInjectionNode）：锚点 tbCurIdx 不随
             // 勾选归档移动，直接按锚点下标取节点会在锚点归档后继续注入已归档内容。
             const nodes = niGetTbNodes();
