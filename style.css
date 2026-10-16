@@ -1356,6 +1356,26 @@
 .ni-stage-expand-btn { font-size: 11px; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; background: transparent; border: none; padding: 2px 4px; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; transition: color .12s; }
 .ni-stage-expand-btn:hover { color: var(--color-text-secondary); }
 
+/* ---- 召回屏蔽（一键屏蔽 / 一键解除屏蔽 / 多选节点）----*/
+.ni-stage-block-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
+  margin: 5px 0 2px; padding: 4px 6px; border-radius: 6px;
+  background: var(--color-background-secondary, #F7F7F8);
+  grid-column: 2 / -1; width: 100%; box-sizing: border-box;
+}
+.ni-block-hint { font-size: 10px; font-weight: 600; letter-spacing: .05em; opacity: .68; display: inline-flex; align-items: center; gap: 3px; }
+.ni-block-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: rgba(160, 68, 94, .12); color: var(--ni-primary, #A0445E); white-space: nowrap; }
+.ni-block-badge.off { background: transparent; color: var(--color-text-tertiary); }
+.ni-block-badge-stage { background: var(--ni-primary, #A0445E); color: #fff; }
+.ni-block-btn { font-size: 11px; padding: 2px 8px; white-space: nowrap; background: var(--color-background-primary, #fff); color: var(--color-text-secondary); border: .5px solid var(--color-border-tertiary); }
+.ni-block-btn:hover { opacity: .8; }
+.ni-block-btn.on { background: var(--ni-success-soft, #E1F5EE); color: var(--ni-success-text, #0F6E56); }
+.ni-pin-block-chk { flex-shrink: 0; margin: 0 2px 0 0; cursor: pointer; }
+.ni-pin-row.ni-node-blocked { opacity: .58; }
+.ni-node-blocked-tag { font-size: 10px; padding: 1px 5px; border-radius: 8px; background: rgba(160, 68, 94, .12); color: var(--ni-primary, #A0445E); white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; }
+.ni-plot-item.ni-node-blocked { opacity: .62; }
+.ni-plot-item.ni-node-blocked .ni-plot-name { text-decoration: line-through; text-decoration-color: rgba(160, 68, 94, .5); }
+
 
 
 /* ---- Empty State ----*/

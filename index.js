@@ -122,6 +122,10 @@ import {
     niReconcileDeviationFacts,
     niMergeDevMessagesByFloor,
     niMergeStageNodes,
+    niBuildBlockedRecallContext,
+    niBuildStageBlockedNodeFilter,
+    niNormalizeRecallBlockFlags,
+    niPlotNodeId,
     niNormalizeDeviationSections,
     niNormalizeDevRange,
     niNormalizeIncomingPlots,
@@ -345,6 +349,10 @@ const DEFAULT_SETTINGS = {
     vecInjDisabled: false, // 有向量数据但用户选择不调用向量注入
     vecInjDisabledByUser: false, // 仅用户主动点击关闭时为 true；旧设置残留不能屏蔽向量
     curStageFullInject: false, // 当前阶段整段直注（不召回、不按单轮上限裁剪），更早阶段仍走向量召回
+    // 召回屏蔽：被屏蔽的节点/阶段不再进向量召回与阶段直注。
+    // 节点用 _nodeId 记录（稳定，跨重新解析不漂移）；阶段用阶段号。
+    blockedRecallNodes: {},   // { [nodeId]: true }
+    blockedRecallStages: {},  // { [stageIdx]: true }
     tbRestoreAfterPluginEnable: false,
     novelLibrary: [],     // 小说快照库 [{name, key, snapshot}]
     // 世界设定注入设置
@@ -904,6 +912,10 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
         vectorRecallScope,
         enabled: niIsFullStageInjectionEnabled(cfg),
         currentStageIdx: directStageCurrentIdx,
+        settings: cfg,
+        // 只有「一个 chunk 里的节点全被屏蔽」才算整块屏蔽：把节点→chunk 的归属
+        // 交给统一入口算一次，避免在召回热路径里反复遍历全部剧情节点。
+        explicitPlotEntries: getAllPlotsInStoryOrder(S),
     });
 
     return {
@@ -917,6 +929,9 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
         fullStageInjectionEnabled: fullStagePlan.fullInjectEnabled,
         fullStageInjectionStageIdx: fullStagePlan.fullInjectStageIdx,
         fullStageInjectionApplied: fullStagePlan.fullInjectApplied,
+        blockedRecallContext: fullStagePlan.blockedRecallContext,
+        blockedRecallChunkIdxs: fullStagePlan.blockedChunkIdxs || [],
+        blockedRecallStageIdxs: fullStagePlan.blockedStageIdxs || [],
     };
 }
 
@@ -930,6 +945,12 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
     // 整阶段全量直注时，穿书模式也必须发「整个阶段」，不能收紧成当前节点一个。
     const fullInjectActive = plan.fullStageInjectionApplied === true;
     plan.fullStageInjectionWholeStageSent = false;
+    // 屏蔽要在两条注入路径上都生效：向量召回侧已按块过滤，阶段直注侧在这里把
+    // 被屏蔽的节点（或整段被屏蔽的阶段）从直注正文里剔掉。
+    const blockedRecallContext = plan.blockedRecallContext?.active
+        ? plan.blockedRecallContext
+        : null;
+    const blockedChunkIdxs = plan.blockedRecallChunkIdxs || [];
     const payload = niBuildStageInjectionPayload({
         stageIndices: plan.directStageInjectionStages,
         currentStageIdx: plan.directStageCurrentIdx,
@@ -941,12 +962,16 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
             const getCompressedChunkText = ci => (S.chunkResults[ci] && S.chunkResults[ci].trim())
                 ? S.chunkResults[ci]
                 : (S.chunks[ci] || '');
+            const blockFilter = niBuildStageBlockedNodeFilter(blockedRecallContext, si);
             if (fullInjectActive) {
-                // 整阶段直注要在穿书模式下发「这个阶段的全部节点」，不能收紧成当前节点。
+                // 整阶段直注要在穿书模式下发「这个阶段的全部节点」，不能收紧成当前节点；
+                // 被屏蔽的节点在这里被摘掉，其余照发。
                 const wholeStageText = niBuildTransbookWholeStageDetailText(si, {
                     rawMode,
                     getCompressedChunkText,
                     runtimeIndex,
+                    blockedContext: blockedRecallContext,
+                    blockedChunkIdxs,
                 });
                 if (wholeStageText) {
                     plan.fullStageInjectionWholeStageSent = true;
@@ -957,18 +982,21 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
             const tbDetail = niBuildTransbookStageDetailText(si, plan.curTbNode, {
                 rawMode,
                 getCompressedChunkText,
+                blockedContext: blockedRecallContext,
             });
             if (tbDetail != null) return tbDetail;
 
             if (rawMode === 'compressed') {
                 const chunkIdxSet = runtimeIndex.chunkIdxsByStage[si] || new Set();
+                const blockedChunkSet = new Set(blockedChunkIdxs.map(chunkIdx => Number(chunkIdx)));
                 const texts = [...chunkIdxSet].sort((a, b) => a - b)
+                    .filter(chunkIdx => !blockedChunkSet.has(Number(chunkIdx)))
                     .map(getCompressedChunkText)
                     .filter(text => String(text || '').trim());
                 return texts.length ? `【第 ${si} 阶段压缩原文】\n${texts.join('\n')}` : '';
             }
             const nodes = runtimeIndex.nodesByStage[si] || { main: [], sub: [], pivot: [] };
-            const allNodes = niMergeStageNodes(nodes);
+            const allNodes = niMergeStageNodes(nodes, { filter: blockFilter });
             if (!allNodes.length) return '';
             return `【第 ${si} 阶段剧情节点】\n${allNodes
                 .map(plot => `· ${plot.title || '未命名节点'}：${plot.body || plot.content || ''}`)
@@ -1783,6 +1811,10 @@ const {
     niGenStagesManual,
     getNodesForStage,
     buildNodePills,
+    niRenderPinList,
+    niToggleBlockMode,
+    niApplyBlockAction,
+    niRefreshStageBlockRow,
     niSetAllStagesEnabled,
     niToggleStage,
     niSetStagePageSize,
@@ -3342,6 +3374,7 @@ const {
     niBoundIntValue,
     getNodesForStage,
     niMergeStageNodes,
+    niBuildBlockedRecallContext,
     recallRelevant,
     niResolveVectorRecallStageScopes,
     niGetTbNodes,
@@ -3502,6 +3535,7 @@ async function onPromptReady(eventData) {
         curTbNode,
         vectorRecallScope,
         directStageInjectionStages,
+        blockedRecallChunkIdxs,
     } = stageInjectionPlan;
 
     // ① 向量块注入
@@ -3542,6 +3576,8 @@ async function onPromptReady(eventData) {
                     keywordTerms,
                     // 非穿书模式没有当前节点可锚定，让召回自己从得分分布反推当前阶段。
                     inferAnchorStage: !curTbNode,
+                    // 用户屏蔽的节点/阶段：整块被屏蔽的源 chunk 不参与召回。
+                    excludeChunkIdxs: blockedRecallChunkIdxs,
                 });
                 if (recallText.trim()) {
                     const vecContent = `[小说原著相关片段·向量召回]\n${recallText}\n[/小说原著相关片段·向量召回]`;
@@ -4830,25 +4866,38 @@ jQuery(async () => {
             container.dataset.activeType = '';
             $(this).removeClass('ni-pill-active');
         } else {
-            // Render inline node list
-            const nodes = getNodesForStage(stageIdx);
-            const typeMap = { main: '主线节点', sub: '支线节点', pivot: '关键转折' };
-            const items = nodes[plotType] || [];
-            if (!items.length) { niGoPlot(plotType, stageIdx); return; }
-            const html = items.map((p, idx) => `<div class="ni-pin-row ni-pin-type-${plotType}" data-plot-type="${plotType}" data-stage-idx="${stageIdx}" data-item-idx="${idx}" data-node-id="${niEscAttr(niEnsurePlotNodeId(p, plotType, idx))}">
-              <i class="ti ti-git-branch ni-pin-icon"></i>
-              <span class="ni-pin-title">${niEscHtml(p.title || '')}</span>
-              ${p.location ? `<span class="ni-pin-loc"><i class="ti ti-map-pin"></i>${niEscHtml(p.location)}</span>` : ''}
-            </div>`).join('');
-            container.innerHTML = `<div class="ni-pin-label">${typeMap[plotType] || plotType}</div>${html}`;
-            container.dataset.activeType = plotType;
-            container.style.display = 'block';
+            // Render inline node list（屏蔽多选模式下会带勾选框，见 niRenderPinList）
+            niRenderPinList(stageIdx, plotType);
+            if (container && container.style.display === 'none') return;
             // Highlight active pill, unhighlight others in same stage
             $(this).closest('.ni-stage-node-pills').find('.ni-node-pill').removeClass('ni-pill-active');
             $(this).addClass('ni-pill-active');
         }
     });
+    // ── 召回屏蔽：一键屏蔽 / 一键解除屏蔽 / 多选节点 ──────────────
+    $app.on('click', '[data-block-action]', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const action = String($(this).data('block-action') || '');
+        const stageIdx = parseInt($(this).data('stage-idx'));
+        if (!Number.isFinite(stageIdx) || stageIdx <= 0) return;
+        if (action === 'toggle-multi') {
+            niToggleBlockMode(stageIdx);
+            $(this).closest('.ni-stage-node-pills')?.find('.ni-node-pill').removeClass('ni-pill-active');
+            return;
+        }
+        niApplyBlockAction(action, stageIdx);
+    });
+    $app.on('change', '.ni-pin-block-chk', function(e) {
+        e.stopPropagation();
+    });
+    $app.on('click', '.ni-pin-block-chk', function(e) {
+        e.stopPropagation();
+    });
     $app.on('click', '.ni-pin-row', function() {
+        // 多选节点模式下点整行就是勾选/取消勾选，不再跳转到节点详情。
+        const chk = $(this).find('.ni-pin-block-chk').get(0);
+        if (chk) { chk.checked = !chk.checked; return; }
         const plotType = $(this).data('plot-type');
         const stageIdx = parseInt($(this).data('stage-idx'));
         const itemIdx = parseInt($(this).data('item-idx'));
