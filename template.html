@@ -1409,6 +1409,13 @@
           <button class="ni-bulk-btn off" id="ni-stage-disable-all" title="关闭所有阶段"><i class="ti ti-x"></i>全部关闭</button>
         </div>
         <div class="ni-stage-full-inject-note" id="ni-stage-full-inject-note"></div>
+        <div class="ni-stage-block-bar">
+          <span class="ni-block-hint"><i class="ti ti-eye-off"></i>召回屏蔽·全局</span>
+          <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-prev" data-stage-block-action="block-prev" title="把当前阶段之前的阶段整段屏蔽，不再进向量召回与阶段直注"><i class="ti ti-eye-off"></i>一键屏蔽之前阶段</button>
+          <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-pick-stages" data-stage-block-action="toggle-pick" title="在每个阶段卡片上显示勾选框，可跨多个阶段勾选后一次性屏蔽"><i class="ti ti-checkbox"></i>多选阶段</button>
+          <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-apply" data-stage-block-action="apply-picked" style="display:none" title="把勾选的阶段整段屏蔽"><i class="ti ti-eye-off"></i>屏蔽勾选的阶段</button>
+          <span class="ni-stage-block-hint" id="ni-stage-block-hint"></span>
+        </div>
         <div class="ni-stage-budget-note" id="ni-stage-inj-budget-note" style="display:none">未向量阶段单轮注入上限：32000 Token</div>
         <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
           <label class="ni-pagination-size">每 <input type="number" id="ni-stage-page-size" value="20" min="1" max="200" step="1" aria-label="每页阶段数"> 一页</label>

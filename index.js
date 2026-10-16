@@ -1151,6 +1151,7 @@ function syncSettingsToUI() {
     sv('#ni-lib-page-size', cfg.novelLibraryPageSize ?? DEFAULT_SETTINGS.novelLibraryPageSize);
     niUpdateStageInjectionBudgetNote();
     niUpdateStageFullInjectUI();
+    niRefreshStageBlockToolbar();
     sv('#ni-dev-inj-pos', cfg.devInjPos  ?? DEFAULT_SETTINGS.devInjPos);
     sv('#ni-dev-inj-depth',cfg.devInjDepth?? DEFAULT_SETTINGS.devInjDepth);
     sv('#ni-dev-inj-role',cfg.devInjRole ?? DEFAULT_SETTINGS.devInjRole);
@@ -1822,6 +1823,8 @@ const {
     niToggleBlockMode,
     niApplyBlockAction,
     niRefreshStageBlockRow,
+    niApplyStageBlockAction,
+    niRefreshStageBlockToolbar,
     niSetAllStagesEnabled,
     niToggleStage,
     niSetStagePageSize,
@@ -4896,6 +4899,20 @@ jQuery(async () => {
         niApplyBlockAction(action, stageIdx);
     });
     $app.on('change', '.ni-pin-block-chk', function(e) {
+        e.stopPropagation();
+    });
+    // ── 召回屏蔽·全局：一键屏蔽之前阶段 / 多选阶段 ──────────────
+    $app.on('click', '[data-stage-block-action]', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        niApplyStageBlockAction(String($(this).data('stage-block-action') || ''));
+    });
+    $app.on('change', '.ni-stg-block-chk', function(e) {
+        e.stopPropagation();
+        // 勾选状态以 DOM 为准，这里只刷新工具条上的计数与按钮可用性。
+        niRefreshStageBlockToolbar();
+    });
+    $app.on('click', '.ni-stg-block-chk', function(e) {
         e.stopPropagation();
     });
     $app.on('click', '.ni-pin-block-chk', function(e) {
