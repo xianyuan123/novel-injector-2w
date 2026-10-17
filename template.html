@@ -4,6 +4,15 @@
     <!-- ========== PAGE: PROCESS ==========-->
     <div class="ni-page on" id="ni-pg-process">
 
+      <!-- 上手引导（四步；全部完成后自动隐藏）-->
+      <div class="ni-onboard" id="ni-onboard" hidden>
+        <div class="ni-onboard-head">
+          <span class="ni-onboard-title"><i class="ti ti-route"></i>按这四步走一遍，插件就准备好了</span>
+          <button type="button" class="ni-onboard-close" id="ni-onboard-close" title="隐藏引导" aria-label="隐藏引导"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="ni-onboard-steps" id="ni-onboard-steps"></div>
+      </div>
+
       <!-- Upload Card-->
       <div class="ni-card">
         <div class="ni-ctitle"><span class="ni-ctitle-label"><i class="ti ti-file-text"></i>上传小说</span></div>
@@ -1603,6 +1612,31 @@
       <pre class="ni-vec-debug-content" id="ni-vec-debug-content"></pre>
       <div class="ni-modal-btns">
         <button class="ni-modal-confirm" id="ni-vec-debug-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 撤销浮条：删错了还有 30 秒后悔-->
+  <div class="ni-undo-bar" id="ni-undo-bar" hidden>
+    <span class="ni-undo-txt" id="ni-undo-txt"></span>
+    <button type="button" class="ni-undo-btn" id="ni-undo-btn"><i class="ti ti-arrow-back-up"></i>撤销</button>
+    <span class="ni-undo-timer" id="ni-undo-timer">30</span>
+  </div>
+
+  <!-- 运行记录红点（有失败才出现）-->
+  <button type="button" class="ni-issue-dot" id="ni-issue-dot" hidden title="有运行问题，点开看原因">
+    <i class="ti ti-alert-triangle"></i>
+    <span class="ni-issue-count" id="ni-issue-count">0</span>
+  </button>
+
+  <div class="ni-modal-bg" id="ni-issue-modal" style="display:none">
+    <div class="ni-modal ni-issue-card" role="dialog" aria-modal="true" aria-labelledby="ni-issue-title">
+      <div class="ni-modal-title" id="ni-issue-title">运行记录</div>
+      <div class="ni-issue-note">这里记下最近出过的错（注入、召回、推演、保存）。同一条不会重复刷屏。</div>
+      <div class="ni-issue-list" id="ni-issue-list"></div>
+      <div class="ni-modal-btns">
+        <button class="ni-modal-confirm ni-issue-clear" id="ni-issue-clear" type="button">清空</button>
+        <button class="ni-modal-confirm" id="ni-issue-close" type="button">关闭</button>
       </div>
     </div>
   </div>

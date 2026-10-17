@@ -250,6 +250,7 @@ import {
     niResolveProgressAnchorStage,
     niResolveStageInjectionUiState,
     niSummarizeInjectionSections,
+    niShowUndoBar,
 } from './lib/ui-system.js';
 
 // ============================================================
@@ -739,6 +740,7 @@ function niLoadSettings() {
                 niSyncCleanButtonState();
                 niLoadPlotPagesFromChat();
                 renderPlots(); renderCharacters(); buildStages(); niRenderWorldSettings();
+                try { niUpdateOnboardUI(); } catch { /* 引导只是锦上添花 */ }
                 const cfg = extension_settings[EXT_NAME] || (extension_settings[EXT_NAME] = {});
                 cfg._stageStates = { ...(S.stageStates || {}) };
                 saveSettingsDebounced();
@@ -1468,6 +1470,11 @@ function niSwitchPage(name, btn) {
         } catch (e) {
             console.warn('[NI] 刷新阶段页注入按钮失败:', e);
         }
+    }
+    try {
+        niUpdateOnboardUI();
+    } catch (e) {
+        console.warn('[NI] 刷新上手引导失败:', e);
     }
 }
 window.niSwitchPage = niSwitchPage;
@@ -3839,6 +3846,7 @@ async function niRunOffscreenSimulation({ reason = 'manual', silent = false } = 
         return { ok: true, added: parsed.threads.length, total: threads.length };
     } catch (e) {
         console.warn('[NI] 后台推演失败:', e);
+        niLogIssue('后台推演', e?.message || String(e));
         if (!silent) toastr.warning(`后台推演失败：${e?.message || e}`);
         return { error: e };
     } finally {
@@ -4416,6 +4424,128 @@ function niToastVectorRecallFailOnce(message) {
     } catch {
         console.warn('[NI] 向量召回失败:', text);
     }
+    niLogIssue('向量召回', text);
+}
+
+// ============================================================
+// 运行记录：给失败一个看得见的地方
+// 以前注入/召回/推演出错只落 console，用户以为「这轮就是没内容」。
+// 这里记一份环形日志，右上角红点提示，点开能看原因。
+// ============================================================
+
+const NI_ISSUE_LOG_LIMIT = 50;
+const _niIssueLog = [];
+
+function niLogIssue(source, message, { level = 'warn', dedupeMs = 30000 } = {}) {
+    const src = String(source || '运行').trim() || '运行';
+    const msg = String(message || '').trim() || '原因未知';
+    const now = Date.now();
+    const dup = _niIssueLog.find(e => e.source === src && e.message === msg && now - e.at < dedupeMs);
+    if (dup) {
+        dup.at = now;
+        dup.count = (dup.count || 1) + 1;
+    } else {
+        _niIssueLog.unshift({ source: src, message: msg, at: now, level: level === 'error' ? 'error' : 'warn', count: 1 });
+        if (_niIssueLog.length > NI_ISSUE_LOG_LIMIT) _niIssueLog.length = NI_ISSUE_LOG_LIMIT;
+    }
+    niRefreshIssueDot();
+}
+
+function niRefreshIssueDot() {
+    const dot = q('#ni-issue-dot');
+    const cnt = q('#ni-issue-count');
+    if (!dot) return;
+    dot.hidden = _niIssueLog.length === 0;
+    if (cnt) cnt.textContent = String(_niIssueLog.length);
+    dot.classList.toggle('is-error', _niIssueLog.some(e => e.level === 'error'));
+}
+
+function niFormatIssueTime(ts) {
+    const d = new Date(Number(ts) || Date.now());
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function niRenderIssueList() {
+    const list = q('#ni-issue-list');
+    if (!list) return;
+    if (!_niIssueLog.length) {
+        list.innerHTML = '<div class="ni-issue-empty">还没有记录。注入、召回、推演、保存出错时会出现在这里。</div>';
+        return;
+    }
+    list.innerHTML = _niIssueLog.map(entry => {
+        const cls = entry.level === 'error' ? ' is-error' : '';
+        const times = entry.count > 1 ? `<span class="ni-issue-time">×${entry.count}</span>` : '';
+        return `<div class="ni-issue-item${cls}">`
+            + `<div class="ni-issue-head"><span class="ni-issue-src">${niEscHtml(entry.source)}</span>`
+            + `<span class="ni-issue-time">${niFormatIssueTime(entry.at)}</span>${times}</div>`
+            + `<div class="ni-issue-msg">${niEscHtml(entry.message)}</div></div>`;
+    }).join('');
+}
+
+function niOpenIssueModal() {
+    niRenderIssueList();
+    const modal = q('#ni-issue-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function niCloseIssueModal() {
+    const modal = q('#ni-issue-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+// ── 撤销：只给「删了就没了」的操作留后悔窗口 ──────────────
+function niOfferUndo(text, restore, duration = 30000) {
+    if (typeof restore !== 'function') return;
+    try {
+        niShowUndoBar({ text, duration, onUndo: restore });
+    } catch (e) {
+        console.warn('[NI] 撤销条显示失败:', e);
+    }
+}
+
+// ── 上手引导：四步，当前这步高亮 ──────────────────────────
+const NI_ONBOARD_KEY = 'ni_onboard_dismissed_v1';
+
+function niOnboardDismissed() {
+    try {
+        return localStorage.getItem(NI_ONBOARD_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function niOnboardSteps() {
+    const chunkCount = Array.isArray(S.chunks) ? S.chunks.length : 0;
+    const hasVector = S.vecDone === true
+        || Object.values(S.stageVecDone || {}).some(v => v === true);
+    return [
+        { label: '导入章节', done: chunkCount > 0, page: 'process' },
+        { label: '清洗正文', done: S.cleanDone === true, page: 'process' },
+        { label: '拆分阶段', done: (Number(S.stageMapN) || 0) > 0, page: 'stage' },
+        { label: '写入向量', done: hasVector, page: 'stage' },
+    ];
+}
+
+function niUpdateOnboardUI() {
+    const box = q('#ni-onboard');
+    const wrap = q('#ni-onboard-steps');
+    if (!box || !wrap) return;
+    const steps = niOnboardSteps();
+    const firstOpen = steps.find(s => !s.done);
+    if (niOnboardDismissed() || !firstOpen) {
+        box.hidden = true;
+        return;
+    }
+    box.hidden = false;
+    wrap.innerHTML = steps.map((step, i) => {
+        const cls = step.done ? 'done' : (step === firstOpen ? 'on' : '');
+        const idx = step.done ? '✓' : String(i + 1);
+        const disabled = step.done ? 'disabled' : '';
+        return `<button type="button" class="ni-onboard-step ${cls}" data-ni-onboard-page="${step.page}" ${disabled}>`
+            + `<span class="ni-onboard-idx">${idx}</span>`
+            + `<span class="ni-onboard-lbl">${niEscHtml(step.label)}</span></button>`;
+    }).join('');
 }
 
 /**
@@ -4605,6 +4735,7 @@ async function onPromptReady(eventData) {
         }
     } catch (e) {
         console.warn('[NI] 后台动向注入失败:', e);
+        niLogIssue('后台动向注入', e?.message || String(e));
     }
 
     // ③ 角色人设注入（取文与「注入预览」共用 niBuildCharInjectionText，两边不会跑偏）
@@ -5040,19 +5171,39 @@ jQuery(async () => {
     });
     $app.on('click', '#ni-off-clear', () => {
         if (!confirm('清空所有后台动向记录？')) return;
+        const prev = (window.niTbGetOffscreenState?.() || {}).threads || [];
         window.niTbSetOffscreenState?.({ threads: [], lastRunNodeId: '', lastRunAt: 0 });
         niRenderOffscreenThreads();
         niUpdateOffscreenStatus();
+        if (prev.length) {
+            niOfferUndo(`已清空 ${prev.length} 条后台动向`, () => {
+                window.niTbSetOffscreenState?.({ threads: prev });
+                niRenderOffscreenThreads();
+                niUpdateOffscreenStatus();
+            });
+        }
     });
     $app.on('click', '[data-off-del]', (ev) => {
         ev?.stopPropagation?.();
         const idx = parseInt(ev?.target?.dataset?.offDel, 10);
         if (!Number.isFinite(idx)) return;
         const state = window.niTbGetOffscreenState?.() || { threads: [] };
-        const threads = (state.threads || []).filter((_, i) => i !== idx);
+        const list = state.threads || [];
+        const removed = list[idx];
+        const threads = list.filter((_, i) => i !== idx);
         window.niTbSetOffscreenState?.({ threads });
         niRenderOffscreenThreads();
         niUpdateOffscreenStatus();
+        if (removed) {
+            niOfferUndo('已删除 1 条后台动向', () => {
+                const now = (window.niTbGetOffscreenState?.() || {}).threads || [];
+                const restored = [...now];
+                restored.splice(Math.min(idx, restored.length), 0, removed);
+                window.niTbSetOffscreenState?.({ threads: restored });
+                niRenderOffscreenThreads();
+                niUpdateOffscreenStatus();
+            });
+        }
     });
     $app.on('change', '#ni-off-enabled, #ni-off-mode, #ni-off-model, #ni-off-pov, #ni-off-stages, #ni-off-maxchars, #ni-off-api-url, #ni-off-api-model, #ni-off-api-key, #ni-off-api-timeout', () => {
         niSaveOffscreenSettingsFromUi();
@@ -5064,6 +5215,30 @@ jQuery(async () => {
     // 状态栏（穿书界面）里删条目也会改同一份数据，这里把弹窗跟着刷新
     document.addEventListener('ni:offscreen-changed', () => {
         try { niRenderOffscreenThreads(); } catch (e) { console.warn('[NI] 后台动向同步失败:', e); }
+    });
+    // ── 运行记录（红点 / 弹窗）──────────────────────────────
+    $app.on('click', '#ni-issue-dot', (ev) => {
+        ev?.stopPropagation?.();
+        niOpenIssueModal();
+    });
+    $app.on('click', '#ni-issue-close', () => niCloseIssueModal());
+    $app.on('click', '#ni-issue-modal', function(e) {
+        if (e.target === this) niCloseIssueModal();
+    });
+    $app.on('click', '#ni-issue-clear', () => {
+        _niIssueLog.length = 0;
+        niRefreshIssueDot();
+        niRenderIssueList();
+    });
+    // ── 上手引导 ────────────────────────────────────────────
+    $app.on('click', '#ni-onboard-close', () => {
+        try { localStorage.setItem(NI_ONBOARD_KEY, '1'); } catch { /* 隐私模式忽略 */ }
+        const box = q('#ni-onboard');
+        if (box) box.hidden = true;
+    });
+    $app.on('click', '.ni-onboard-step', function() {
+        const page = this?.dataset?.niOnboardPage;
+        if (page) niSwitchPage(page, q(`.ni-nav-btn[data-page="${page}"]`));
     });
     // 未来剧情预告：把「当前阶段之后」若干阶段的剧情提前注入。
     $app.on('click', '#ni-stage-future-inject', () => {
@@ -5429,9 +5604,15 @@ jQuery(async () => {
         e.stopPropagation();
         if (!Array.isArray(S.devFactHistory) || !S.devFactHistory.length) return;
         if (!confirm('确定清除所有变更记录吗？当前分支事实不会受影响。')) return;
+        const prevHistory = [...S.devFactHistory];
         S.devFactHistory = [];
         await niQueueDeviationGuideSave({ immediate: true });
         niSyncDeviationResultUI({ preserveBody: true });
+        niOfferUndo(`已清除 ${prevHistory.length} 条变更记录`, () => {
+            S.devFactHistory = prevHistory;
+            niQueueDeviationGuideSave({ immediate: true });
+            niSyncDeviationResultUI({ preserveBody: true });
+        });
     });
     $app.on('click', '#ni-dev-facts-edit-toggle', async function() {
         const editing = this.getAttribute('aria-expanded') === 'true';
@@ -5547,7 +5728,21 @@ jQuery(async () => {
     // 删除确认/取消
     $app.on('click', '#ni-plot-del-cancel', () => niTogglePlotDel());
     $app.on('click', '#ni-plot-del-confirm', () => {
+        const snapshot = {
+            main: [...(S.plots?.main || [])],
+            sub: [...(S.plots?.sub || [])],
+            pivot: [...(S.plots?.pivot || [])],
+        };
+        const countBefore = snapshot.main.length + snapshot.sub.length + snapshot.pivot.length;
         niConfirmPlotDel();
+        const countAfter = (S.plots?.main?.length || 0) + (S.plots?.sub?.length || 0) + (S.plots?.pivot?.length || 0);
+        const removed = Math.max(0, countBefore - countAfter);
+        if (!removed) return;
+        niOfferUndo(`已删除 ${removed} 个剧情事件`, () => {
+            S.plots = snapshot;
+            niSaveSettings();
+            renderPlots({ force: true });
+        });
     });
     // modal 保存/取消
     $app.on('click', '#ni-plot-modal-save', () => {
@@ -6474,8 +6669,9 @@ jQuery(document).ready(function () {
                     raw = await niGenerateWithTavernMainPreset(messages, { responseLength: 200 });
                 }
             } catch (e) {
-                // 判定失败不推进、也不弹错：下一轮回复会再判一次。
+                // 判定失败不推进、也不弹错：下一轮回复会再判一次。红点里留一条便于排查。
                 console.warn('[NI] 自动推进判定失败:', e);
+                niLogIssue('自动推进判定', e?.message || String(e));
                 return { error: e };
             } finally {
                 window.niTbSetAutoAdvanceJudging?.(false);

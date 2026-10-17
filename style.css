@@ -4218,3 +4218,302 @@ select.ni-modal-input {
 #ni-storybar.ni-tb-theme-follow .ni-tb-scard.far {
   background: var(--ni-success-soft-2, var(--color-background-secondary, #f7f7f8));
 }
+
+/* ============================================
+   上手引导（处理页顶部四步）
+   ============================================*/
+.ni-onboard {
+  margin: 0 0 10px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--ni-primary-border, var(--color-border-secondary, #e8d5dd));
+  border-radius: 10px;
+  background: var(--ni-primary-alpha-06, var(--color-background-secondary, #fdf6f9));
+}
+
+.ni-onboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ni-onboard-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ni-surface-text, var(--color-text-primary));
+}
+
+.ni-onboard-title i {
+  color: var(--ni-primary, #a0445e);
+}
+
+.ni-onboard-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary, #888);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ni-onboard-close:hover {
+  background: var(--color-background-secondary, rgba(128, 128, 128, .12));
+  color: var(--color-text-primary, #333);
+}
+
+.ni-onboard-steps {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ni-onboard-step {
+  flex: 1 1 120px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--color-border-tertiary, #e8e8ec);
+  border-radius: 8px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-text-secondary, #666);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.ni-onboard-step:disabled {
+  cursor: default;
+  opacity: .72;
+}
+
+.ni-onboard-step:not(:disabled):hover {
+  border-color: var(--ni-primary, #a0445e);
+}
+
+.ni-onboard-idx {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-background-secondary, #f0f0f4);
+  color: var(--color-text-tertiary, #888);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ni-onboard-lbl {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ni-onboard-step.done {
+  border-color: var(--ni-success-border, #cfe8dd);
+  background: var(--ni-success-soft-2, #f2faf6);
+  color: var(--ni-success-text, #0f6e56);
+}
+
+.ni-onboard-step.done .ni-onboard-idx {
+  background: var(--ni-success, #1d9e75);
+  color: #fff;
+}
+
+.ni-onboard-step.on {
+  border-color: var(--ni-primary, #a0445e);
+  background: var(--ni-primary-soft, #f5e6ec);
+  color: var(--ni-primary-soft-text, #8b3a50);
+  font-weight: 700;
+}
+
+.ni-onboard-step.on .ni-onboard-idx {
+  background: var(--ni-primary, #a0445e);
+  color: #fff;
+}
+
+/* ============================================
+   撤销浮条
+   ============================================*/
+.ni-undo-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 58px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--color-border-secondary, #d8d8de);
+  border-radius: 10px;
+  background: var(--color-background-primary, #fff);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .16);
+  color: var(--color-text-primary, #222);
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.ni-undo-bar.ni-undo-in {
+  animation: niUndoIn .18s ease-out;
+}
+
+.ni-undo-bar.ni-undo-out {
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+@keyframes niUndoIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.ni-undo-txt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ni-undo-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--ni-primary, #a0445e);
+  border-radius: 7px;
+  background: var(--ni-primary-soft, #f5e6ec);
+  color: var(--ni-primary-soft-text, #8b3a50);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ni-undo-btn:hover {
+  background: var(--ni-primary, #a0445e);
+  color: #fff;
+}
+
+.ni-undo-timer {
+  flex: none;
+  min-width: 18px;
+  color: var(--color-text-tertiary, #999);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ============================================
+   运行记录（红点 + 弹窗）
+   ============================================*/
+.ni-issue-dot {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 55;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--ni-warning-border, rgba(217, 119, 6, .35));
+  border-radius: 999px;
+  background: var(--ni-warning-soft, #fdf3e3);
+  color: var(--ni-warning-text, #9a5b00);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ni-issue-dot:hover {
+  background: var(--ni-warning, #d97706);
+  color: #fff;
+}
+
+.ni-issue-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.ni-issue-card {
+  max-width: 640px;
+  width: calc(100% - 32px);
+}
+
+.ni-issue-note {
+  margin: 0 0 8px;
+  color: var(--color-text-tertiary, #888);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.ni-issue-list {
+  max-height: 52vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ni-issue-empty {
+  padding: 18px 8px;
+  color: var(--color-text-tertiary, #999);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ni-issue-item {
+  padding: 7px 9px;
+  border: 1px solid var(--color-border-tertiary, #e8e8ec);
+  border-left: 3px solid var(--ni-warning, #d97706);
+  border-radius: 7px;
+  background: var(--color-background-secondary, #f7f7f8);
+}
+
+.ni-issue-item.is-error {
+  border-left-color: var(--color-danger, #d33);
+}
+
+.ni-issue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  font-size: 11px;
+}
+
+.ni-issue-src {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ni-warning-soft-2, #fbead0);
+  color: var(--ni-warning-text, #9a5b00);
+  font-weight: 700;
+}
+
+.ni-issue-time {
+  color: var(--color-text-tertiary, #999);
+  font-variant-numeric: tabular-nums;
+}
+
+.ni-issue-msg {
+  color: var(--color-text-primary, #222);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
