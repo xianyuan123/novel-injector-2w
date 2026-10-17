@@ -1375,6 +1375,144 @@
 .ni-block-btn.unblock { background: var(--color-background-primary, #fff); color: var(--ni-primary, #A0445E); border-color: var(--ni-primary, #A0445E); }
 .ni-pin-block-chk { flex-shrink: 0; margin: 0 2px 0 0; cursor: pointer; }
 /* 全局「一键屏蔽之前阶段 / 多选阶段」工具条 */
+/* 注入策略条：默认收起，只显示一行实时状态，点开才是各种开关 */
+.ni-stage-inj-bar {
+  display: flex; align-items: center; gap: 6px;
+  margin: 8px 0 0; padding: 7px 9px; border-radius: 7px;
+  background: var(--color-background-secondary, #F7F7F8);
+  border: .5px solid var(--color-border-tertiary, #E5E5E7);
+  cursor: pointer; user-select: none;
+  transition: background .15s;
+}
+.ni-stage-inj-bar:hover { background: var(--color-background-tertiary, #F0F0F2); }
+.ni-stage-inj-bar:focus-visible { outline: 2px solid var(--ni-primary, #A0445E); outline-offset: 1px; }
+.ni-stage-inj-bar-title {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; flex-shrink: 0;
+  color: var(--color-text-primary, #333);
+}
+.ni-stage-inj-bar-title i { font-size: 14px; opacity: .8; }
+.ni-stage-inj-summary {
+  flex: 1; min-width: 0; font-size: 11.5px; line-height: 1.35;
+  color: var(--color-text-secondary, #666);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ni-stage-inj-summary b { font-weight: 600; color: var(--ni-primary, #A0445E); }
+.ni-stage-inj-chevron { flex-shrink: 0; font-size: 14px; opacity: .55; transition: transform .18s; }
+.ni-stage-inj-bar.open .ni-stage-inj-chevron { transform: rotate(180deg); }
+.ni-stage-inj-body { display: none; }
+.ni-stage-inj-body.on { display: block; }
+.ni-stage-inj-body > .ni-hint-box { margin-top: 6px; }
+/* 进度锚点：手动指定「我演到第几阶段/第几个节点」 */
+.ni-stage-progress-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: var(--color-background-secondary, #F7F7F8);
+  border: .5px solid var(--color-border-tertiary, #E5E5E7);
+}
+.ni-stage-progress-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #555);
+  white-space: nowrap;
+}
+.ni-stage-progress-label i { font-size: 13px; opacity: .8; }
+.ni-stage-progress-field { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; white-space: nowrap; }
+.ni-stage-progress-field input {
+  width: 52px;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  text-align: center;
+}
+.ni-stage-progress-node {
+  max-width: 190px;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  border-radius: 4px;
+}
+.ni-stage-progress-node:disabled { opacity: .5; }
+.ni-stage-progress-hint {
+  font-size: 11px;
+  color: var(--ni-primary, #A0445E);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* 「预览」小按钮：放在折叠条里，点击不触发折叠（处理器里 stopPropagation） */
+.ni-stage-inj-preview {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  font-size: 11px;
+  line-height: 1.6;
+  border-radius: 5px;
+  border: 1px solid var(--color-border-subtle, #E0E0E4);
+  background: var(--color-background-primary, #fff);
+  color: var(--ni-primary, #A0445E);
+  cursor: pointer;
+  transition: background .15s;
+}
+.ni-stage-inj-preview:hover { background: rgba(160, 68, 94, .1); }
+.ni-stage-inj-preview i { font-size: 12px; }
+
+/* 本轮注入预览弹窗 */
+.ni-inj-preview-card { max-width: 720px; width: min(94vw, 720px); }
+.ni-inj-preview-sum { font-size: 12px; color: var(--color-text-secondary, #666); margin: 2px 0 8px; }
+.ni-inj-preview-list {
+  max-height: 58vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+.ni-inj-preview-item {
+  border: 1px solid var(--color-border-subtle, #E0E0E4);
+  border-radius: 7px;
+  background: var(--color-background-secondary, #FAFAFB);
+  overflow: hidden;
+}
+.ni-inj-preview-item > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 6px 9px;
+  font-size: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ni-inj-preview-item > summary::-webkit-details-marker { display: none; }
+.ni-inj-preview-item-name { font-weight: 600; }
+.ni-inj-preview-item-meta { color: var(--color-text-secondary, #777); font-size: 11px; }
+.ni-inj-preview-item-chars { margin-left: auto; color: var(--ni-primary, #A0445E); font-size: 11px; white-space: nowrap; }
+.ni-inj-preview-item-body {
+  margin: 0;
+  padding: 6px 9px 8px;
+  border-top: 1px dashed var(--color-border-subtle, #E4E4E8);
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+  color: var(--color-text-primary, #333);
+}
+.ni-inj-preview-empty { padding: 10px; font-size: 12px; color: var(--color-text-secondary, #777); text-align: center; }
+.ni-inj-preview-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.ni-inj-preview-actions .ni-bulk-btn { font-size: 11.5px; }
+
 .ni-stage-block-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
   margin: 6px 0 4px; padding: 5px 7px; border-radius: 6px;

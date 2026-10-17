@@ -48,6 +48,7 @@ import {
     NI_FUTURE_PLOT_STAGE_DEFAULT,
     NI_FUTURE_PLOT_STAGE_LIMIT,
     NI_RAW_INJECTION_MAX_TOKENS_DEFAULT,
+    NI_RAW_INJECTION_CHARS_PER_TOKEN,
     NI_VEC_CHUNK_CHARS_DEFAULT,
     NI_VEC_INJECTION_MAX_TOKENS_DEFAULT,
     niBuildFuturePlotPreview,
@@ -224,7 +225,11 @@ import {
     NI_THEME_DEFAULT,
     createThemeEditor,
     niApplyStatusbarTheme,
+    niFormatStageInjSummary,
+    niFormatStageSpan,
+    niResolveProgressAnchorStage,
     niResolveStageInjectionUiState,
+    niSummarizeInjectionSections,
 } from './lib/ui-system.js';
 
 // ============================================================
@@ -359,12 +364,17 @@ const DEFAULT_SETTINGS = {
     vecInjDisabled: false, // 有向量数据但用户选择不调用向量注入
     vecInjDisabledByUser: false, // 仅用户主动点击关闭时为 true；旧设置残留不能屏蔽向量
     curStageFullInject: false, // 当前阶段整段直注（不召回、不按单轮上限裁剪），更早阶段仍走向量召回
+    stageInjExpanded: false, // 阶段页「注入策略」折叠区是否展开（纯界面状态）
     // 未来剧情预告：把「当前阶段剩下的剧情」与「之后若干阶段」提前注入，
     // 帮 AI 把握走向、提前埋伏笔。没开全量直注时这正是最容易写偏的地方。
     futurePlotPreview: false,                      // 是否开启
     futurePlotStages: NI_FUTURE_PLOT_STAGE_DEFAULT, // 往后看几个阶段（0 = 不预告后面的阶段）
     futurePlotNodes: NI_FUTURE_PLOT_NODES_DEFAULT,  // 每个阶段取前几个节点（0 = 该阶段全部节点）
     futurePlotIncludeCurrent: true,                // 当前阶段剩下的节点也算进预告
+    // 进度锚点：手动告诉插件「我演到哪个节点了」。普通模式没有穿书节点可锚定，
+    // 全量直注与未来预告只能靠「最后一个开启的阶段」猜，这个锚点把猜变成确定。
+    progressStageIdx: 0,   // 0 = 自动（普通模式取最后开启的阶段，穿书取当前节点）
+    progressNodeId: '',    // 该阶段内的节点 _nodeId，空 = 从该阶段第一个节点开始
     // 召回屏蔽：被屏蔽的节点/阶段不再进向量召回与阶段直注。
     // 节点用 _nodeId 记录（稳定，跨重新解析不漂移）；阶段用阶段号。
     blockedRecallNodes: {},   // { [nodeId]: true }
@@ -902,6 +912,25 @@ async function niSaveStageRuntimeSettings({ saveMapping = false } = {}) {
     niAutosave?.schedule();
 }
 
+/**
+ * 进度锚点：用户在阶段页手动指定的「我演到第几阶段」。
+ *
+ * 只在普通模式下生效（穿书模式本来就有当前节点可锚定，手动锚点只会添乱）。
+ * 返回 null 表示「没设置，按原来的办法算」。
+ */
+function niResolveProgressAnchorStageIdx(cfg = extension_settings[EXT_NAME] || {}) {
+    return niResolveProgressAnchorStage({
+        transBookMode: !!cfg.transBookMode,
+        progressStageIdx: cfg.progressStageIdx,
+        stageCount: S.stageMapN,
+    });
+}
+
+function niGetProgressAnchorNodeId(cfg = extension_settings[EXT_NAME] || {}) {
+    const nodeId = String(cfg.progressNodeId || '').trim();
+    return nodeId || '';
+}
+
 function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME] || {}) {
     const enabledStages = [];
     for (let i = 1; i <= S.stageMapN; i++) {
@@ -922,7 +951,7 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
         stageVecDone: S.stageVecDone,
         currentStageIdx: curTbNode?.stageIdx,
     });
-    const directStageCurrentIdx = curTbNode?.stageIdx ?? vectorRecallScope.boundaryStageIdx;
+    const directStageCurrentIdx = niResolveProgressAnchorStageIdx(cfg) ?? curTbNode?.stageIdx ?? vectorRecallScope.boundaryStageIdx;
     const directStageInjectionStages = niResolveDirectStageInjectionStages({
         rawStages,
         transBookMode: !!cfg.transBookMode,
@@ -1043,9 +1072,9 @@ function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_
     return payload;
 }
 
-function niBuildStageInjectionBudgetPreview() {
+function niBuildStageInjectionBudgetPreview(precomputedPlan = null) {
     const cfg = extension_settings[EXT_NAME] || {};
-    const plan = niResolveStageInjectionExecutionPlan(cfg);
+    const plan = precomputedPlan || niResolveStageInjectionExecutionPlan(cfg);
     if (!plan.directStageInjectionStages.length) return null;
     return niBuildStageInjectionPayloadForPlan(plan, cfg);
 }
@@ -1069,13 +1098,14 @@ function niTbFullStageInjectionCoversCurrentNode() {
 
 function niUpdateStageInjectionBudgetNote(result = null, {
     visible,
+    plan: precomputedPlan = null,
 } = {}) {
     const note = q('#ni-stage-inj-budget-note');
     if (!note) return;
     let displayResult = result;
     let shouldDisplay = visible;
     if (displayResult == null && shouldDisplay !== false) {
-        displayResult = niBuildStageInjectionBudgetPreview();
+        displayResult = niBuildStageInjectionBudgetPreview(precomputedPlan);
         if (shouldDisplay == null) shouldDisplay = !!displayResult;
     }
     if (shouldDisplay == null) shouldDisplay = !!displayResult;
@@ -1233,6 +1263,11 @@ function syncSettingsToUI() {
     const globalTailPtEl = q('#ni-global-tail-pt-content');
     if (globalTailPtEl) globalTailPtEl.value = cfg.globalTailPrompt ?? GLOBAL_TAIL_PROMPT;
     niSyncGlobalPromptSourceUI(cfg);
+    try {
+        niUpdateProgressAnchorUI();
+    } catch (e) {
+        console.warn('[NI] 同步进度锚点失败:', e);
+    }
     niCleanRequestView.initialize();
     niCleanRequestView.invalidatePreview();
     // 修复：初始化时同步渲染小说库，不依赖导航按钮点击
@@ -3289,6 +3324,356 @@ function niUpdateFuturePlotUI(precomputedPlan = null) {
     note.textContent = text;
 }
 
+function niUpdateStageInjSummary(precomputedPlan = null) {
+    const el = q('#ni-stage-inj-summary');
+    if (!el) return;
+    const cfg = extension_settings[EXT_NAME] || {};
+    const plan = precomputedPlan || niResolveStageInjectionExecutionPlan(cfg);
+    const scope = plan?.vectorRecallScope || {};
+    const futureEnabled = niIsFuturePlotInjectionEnabled(cfg);
+    const futureIncludeCurrent = futureEnabled
+        && niIsFuturePlotIncludeCurrent(cfg)
+        && !niIsCurrentStageAlreadyFullyInjected(plan, cfg);
+    const futureStageIndices = futureEnabled
+        ? niResolveFuturePlotStageIndices({
+            stageCount: S.stageMapN,
+            currentStageIdx: plan?.directStageCurrentIdx,
+            stageLimit: niNormalizeFuturePlotStageCount(cfg.futurePlotStages, DEFAULT_SETTINGS.futurePlotStages),
+            enabledStages: plan?.enabledStages,
+            blockedStageIdxs: plan?.blockedRecallStageIdxs,
+            includeCurrentStage: futureIncludeCurrent,
+        })
+        : [];
+    const text = niFormatStageInjSummary({
+        vectorInjectionDisabled: plan?.vectorInjectionDisabled === true,
+        recallStages: [...(scope.currentStages || []), ...(scope.historicalStages || [])],
+        directStageStages: plan?.directStageInjectionStages || [],
+        fullInjectApplied: plan?.fullStageInjectionApplied === true,
+        futureEnabled,
+        futureStageIndices,
+        currentStageIdx: plan?.directStageCurrentIdx,
+        futureIncludeCurrent,
+        blockedStageCount: (plan?.blockedRecallStageIdxs || []).length,
+        blockedNodeCount: Number(plan?.blockedRecallContext?.nodeIdSet?.size) || 0,
+    });
+    const anchorStageIdx = niResolveProgressAnchorStageIdx(cfg);
+    const anchorText = anchorStageIdx
+        ? `锚点 ${niFormatStageSpan([anchorStageIdx])}${niGetProgressAnchorNodeId(cfg) ? '（节点之后）' : ''}`
+        : '';
+    const finalText = anchorText ? `${anchorText} · ${text}` : text;
+    el.textContent = finalText;
+    el.title = finalText;
+}
+
+// ============================================================
+// 进度锚点
+// ============================================================
+
+/**
+ * 重建「进度锚点」的阶段节点下拉。
+ *
+ * 用 dataset 记住上一次的构成，避免每次刷新都重排 <select>（用户正在选的时候被重排会很烦）。
+ */
+function niRefreshProgressNodeOptions(stageIdx) {
+    const sel = q('#ni-progress-node');
+    if (!sel) return;
+    const cfg = extension_settings[EXT_NAME] || {};
+    const stage = Math.trunc(Number(stageIdx)) || 0;
+    const total = Math.trunc(Number(S.stageMapN)) || 0;
+    const valid = stage > 0 && (total <= 0 || stage <= total);
+    let nodes = [];
+    if (valid) {
+        try {
+            nodes = niMergeStageNodes(getNodesForStage(stage));
+        } catch (e) {
+            console.warn('[NI] 读取阶段节点失败:', e);
+            nodes = [];
+        }
+    }
+    const key = `${stage}|${total}|${nodes.length}`;
+    if (sel.dataset.niKey !== key) {
+        const options = ['<option value="">从阶段开头</option>'];
+        nodes.forEach((node, idx) => {
+            const nodeId = niPlotNodeId(node);
+            if (!nodeId) return;
+            const title = String(node?.title || '').trim() || '未命名节点';
+            options.push(`<option value="${niEscAttr(nodeId)}">${idx + 1}. ${niEscHtml(title)}</option>`);
+        });
+        sel.innerHTML = options.join('');
+        sel.dataset.niKey = key;
+    }
+    const current = valid ? niGetProgressAnchorNodeId(cfg) : '';
+    const hasCurrent = current && [...sel.options].some(option => option.value === current);
+    sel.value = hasCurrent ? current : '';
+    sel.disabled = !valid;
+}
+
+function niUpdateProgressAnchorUI() {
+    const cfg = extension_settings[EXT_NAME] || {};
+    const input = q('#ni-progress-stage');
+    const hint = q('#ni-stage-progress-hint');
+    const stage = Math.trunc(Number(cfg.progressStageIdx)) || 0;
+    if (input) input.value = String(stage > 0 ? stage : 0);
+    niRefreshProgressNodeOptions(stage);
+    if (!hint) return;
+    if (cfg.transBookMode) {
+        hint.textContent = '穿书模式按当前节点锚定，这里不生效';
+        return;
+    }
+    const total = Math.trunc(Number(S.stageMapN)) || 0;
+    const anchored = niResolveProgressAnchorStageIdx(cfg);
+    if (stage > 0 && !anchored) {
+        hint.textContent = total > 0 ? `第 ${stage} 阶段超出范围（共 ${total} 个）` : '还没有阶段可锚定';
+        return;
+    }
+    if (!anchored) {
+        hint.textContent = '自动：取最后一个开启的阶段';
+        return;
+    }
+    hint.textContent = niGetProgressAnchorNodeId(cfg)
+        ? `已锚定：第 ${anchored} 阶段 · 从选中节点之后`
+        : `已锚定：第 ${anchored} 阶段开头`;
+}
+
+function niSetProgressAnchor(stageIdx, nodeId = null, { resetNode = false } = {}) {
+    const cfg = extension_settings[EXT_NAME] || (extension_settings[EXT_NAME] = {});
+    cfg.progressStageIdx = Math.max(0, Math.trunc(Number(stageIdx)) || 0);
+    if (resetNode) cfg.progressNodeId = '';
+    else if (nodeId != null) cfg.progressNodeId = String(nodeId);
+    niSaveSettings();
+    niUpdateProgressAnchorUI();
+    niRefreshInjStrategyUi();
+}
+
+function niUpdateStageInjPanel(expanded = null) {
+    const bar = q('#ni-stage-inj-bar');
+    const body = q('#ni-stage-inj-body');
+    if (!bar || !body) return false;
+    const cfg = extension_settings[EXT_NAME] || {};
+    const open = expanded == null ? cfg.stageInjExpanded === true : expanded === true;
+    body.classList.toggle('on', open);
+    bar.classList.toggle('open', open);
+    bar.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return open;
+}
+
+function niToggleStageInjPanel() {
+    const cfg = extension_settings[EXT_NAME] || {};
+    const open = niUpdateStageInjPanel(!(cfg.stageInjExpanded === true));
+    cfg.stageInjExpanded = open;
+    niSaveSettings();
+    if (open) {
+        // 展开后立刻刷新一遍，避免显示的是上一次的旧状态。
+        niRefreshInjStrategyUi();
+    }
+}
+
+/**
+ * 三个注入策略开关（全量直注 / 未来预告 / 策略条摘要）共用一次计划解析。
+ */
+function niRefreshInjStrategyUi() {
+    const cfg = extension_settings[EXT_NAME] || {};
+    const plan = niResolveStageInjectionExecutionPlan(cfg);
+    niUpdateStageFullInjectUI(plan);
+    niUpdateFuturePlotUI(plan);
+    niUpdateStageInjSummary(plan);
+}
+
+// ============================================================
+// 本轮注入预览
+// ============================================================
+
+const NI_INJ_POS_LABELS = { 0: '主提示后', 1: '聊天内', 2: '主提示前' };
+const NI_INJ_ROLE_LABELS = { 0: '系统', 1: '用户', 2: '助手' };
+
+function niInjMetaLabel(pos, depth, role, extra = '') {
+    const parts = [];
+    const posName = NI_INJ_POS_LABELS[Math.trunc(Number(pos))];
+    if (posName) parts.push(posName);
+    const depthNum = Math.trunc(Number(depth));
+    if (Number.isFinite(depthNum) && depthNum > 0) parts.push(`深度 ${depthNum}`);
+    const roleName = NI_INJ_ROLE_LABELS[Math.trunc(Number(role))];
+    if (roleName) parts.push(roleName);
+    if (extra) parts.push(extra);
+    return parts.join(' · ');
+}
+
+/**
+ * 把「这一轮会发出去的内容」按注入段收集起来。全部复用注入主链的构造函数，
+ * 所以预览看到的就是真正会发出去的东西（向量召回除外，它要实时跑）。
+ */
+function niBuildInjectionPreviewSections(precomputedPlan = null) {
+    const cfg = extension_settings[EXT_NAME] || {};
+    const plan = precomputedPlan || niResolveStageInjectionExecutionPlan(cfg);
+    const sections = [];
+    const push = (id, title, text, meta = '') => {
+        const value = String(text ?? '').trim();
+        if (!value) return;
+        sections.push({ id, title, text: value, meta });
+    };
+    const globalSource = cfg.globalPromptSource === 'tavern' ? 'tavern'
+        : (cfg.globalPromptSource === 'none' ? 'none' : 'builtin');
+    const globalBuiltin = globalSource === 'builtin';
+
+    if (globalBuiltin) {
+        push('global_head', '全局头部提示词', cfg.globalPrompt,
+            niInjMetaLabel(cfg.globalHeadInjPos, cfg.globalHeadInjDepth, cfg.globalHeadInjRole, '拼在消息里'));
+    }
+    push('char', '原著角色人设', niBuildCharInjectionText(),
+        niInjMetaLabel(cfg.charInjPos, cfg.charInjDepth, cfg.charInjRole));
+    push('world', '世界设定', niBuildWorldInjectionText(niGetWorldCategories()),
+        niInjMetaLabel(cfg.worldInjPos, cfg.worldInjDepth, cfg.worldInjRole));
+
+    const deviationGuide = niGetDeviationGuideText({ preferUI: true }).trim();
+    if (deviationGuide) {
+        push('dev', '前文偏差分析', `[当前剧情偏差约束]\n${deviationGuide}\n[/当前剧情偏差约束]`,
+            niInjMetaLabel(cfg.devInjPos, cfg.devInjDepth, cfg.devInjRole));
+    }
+    const styleGuide = (q('#ni-style-result')?.value || S.styleGuide || '').trim();
+    if (styleGuide) {
+        push('style', '文风执行指南', `[文风执行指南]\n${styleGuide}\n[/文风执行指南]`,
+            niInjMetaLabel(cfg.styleInjPos, cfg.styleInjDepth, cfg.styleInjRole));
+    }
+
+    // 阶段直注 / 未来预告：和注入主链调用同一个构造函数
+    if (plan.directStageInjectionStages.length) {
+        const stagePayload = niBuildStageInjectionPayloadForPlan(plan, cfg);
+        if (stagePayload?.content) {
+            const detail = `${stagePayload.detailStages.length} 段正文 / ${stagePayload.summaryStages.length} 段概括`
+                + (stagePayload.truncated ? ' · 已按上限裁剪' : '');
+            push('plot', plan.fullStageInjectionApplied ? '阶段剧情（全量直注）' : '阶段剧情（未向量直注）',
+                stagePayload.content,
+                niInjMetaLabel(cfg.plotInjPos, cfg.plotInjDepth, cfg.plotInjRole, detail));
+        }
+    }
+    const futurePlot = niBuildFuturePlotInjectionPayload(plan, cfg);
+    if (futurePlot?.content) {
+        push('future_plot', '未来剧情预告', futurePlot.content,
+            niInjMetaLabel(cfg.plotInjPos, cfg.plotInjDepth, cfg.plotInjRole,
+                `第 ${futurePlot.stageIndices.join('、')} 阶段`));
+    }
+    if (globalBuiltin) {
+        push('global_tail', '全局尾部提示词', cfg.globalTailPrompt,
+            niInjMetaLabel(cfg.globalTailInjPos, cfg.globalTailInjDepth, cfg.globalTailInjRole, '拼在消息里'));
+    }
+    return sections;
+}
+
+function niRenderInjectionPreview({ recallText = null, recallError = '', busy = false } = {}) {
+    const sumEl = q('#ni-inj-preview-sum');
+    const listEl = q('#ni-inj-preview-list');
+    if (!listEl) return;
+    const cfg = extension_settings[EXT_NAME] || {};
+    const sections = niBuildInjectionPreviewSections();
+    // 向量召回排在「阶段直注」之前（注入顺序），没有阶段段就排在最后
+    let insertAt = sections.findIndex(section => section.id === 'plot');
+    if (insertAt < 0) insertAt = sections.length;
+    sections.splice(insertAt, 0, {
+        id: 'vec',
+        title: '小说原著相关片段（向量召回）',
+        text: recallText ? `[小说原著相关片段·向量召回]\n${recallText}\n[/小说原著相关片段·向量召回]` : '',
+        meta: recallText
+            ? niInjMetaLabel(cfg.vecInjPos, cfg.injDepth, cfg.vecInjRole, '本次已实际跑过')
+            : niInjMetaLabel(cfg.vecInjPos, cfg.injDepth, cfg.vecInjRole, '生成时才实时计算，点下面按钮可以先看一眼'),
+    });
+    const report = niSummarizeInjectionSections(sections, {
+        charsPerToken: NI_RAW_INJECTION_CHARS_PER_TOKEN,
+    });
+    if (sumEl) {
+        const recallState = recallError
+            ? ` · 召回失败：${recallError}`
+            : (recallText ? '' : ' · 召回未计入');
+        sumEl.textContent = report.count
+            ? `共 ${report.count} 段 · ${report.totalChars} 字符 · 约 ${report.totalTokens} Token${recallState}`
+            : '这一轮什么都不会注入（开关都关着，或没有可用内容）。';
+    }
+    const rows = report.sections.map(section => {
+        const share = Math.round(section.share * 100);
+        const body = section.text || '（不预览：生成时会按当时的最新消息实时召回）';
+        return `<details class="ni-inj-preview-item"${section.id === 'vec' ? ' data-pending="1"' : ''}>`
+            + '<summary>'
+            + `<span class="ni-inj-preview-item-name">${niEscHtml(section.title)}</span>`
+            + (section.meta ? `<span class="ni-inj-preview-item-meta">${niEscHtml(section.meta)}</span>` : '')
+            + `<span class="ni-inj-preview-item-chars">${section.chars} 字${section.chars ? ` · ${share}%` : ''}</span>`
+            + '</summary>'
+            + `<pre class="ni-inj-preview-item-body">${niEscHtml(body)}</pre>`
+            + '</details>';
+    });
+    listEl.innerHTML = rows.length
+        ? rows.join('')
+        : '<div class="ni-inj-preview-empty">这一轮没有可注入的内容。</div>';
+    const recallBtn = q('#ni-inj-preview-recall');
+    if (recallBtn) {
+        recallBtn.disabled = busy;
+        recallBtn.innerHTML = busy
+            ? '<i class="ti ti-loader"></i>召回中…'
+            : '<i class="ti ti-search"></i>跑一次真实召回';
+    }
+}
+
+async function niOpenInjectionPreview() {
+    const modal = q('#ni-inj-preview-modal');
+    if (!modal) return;
+    const listEl = q('#ni-inj-preview-list');
+    if (listEl) listEl.innerHTML = '<div class="ni-inj-preview-empty">正在准备预览…</div>';
+    modal.style.display = 'flex';
+    // 压缩原文模式下正文是懒加载的，不先拉一次会预览成空、
+    // 等于给用户一个「这轮没内容」的假象。
+    const cfg = extension_settings[EXT_NAME] || {};
+    if (niNormalizeRawInjMode(cfg.rawInjMode) === 'compressed') {
+        try {
+            await niEnsureChunksLoaded();
+        } catch (e) {
+            console.warn('[NI] 预览加载压缩正文失败:', e);
+        }
+    }
+    niRenderInjectionPreview();
+}
+
+function niCloseInjectionPreview() {
+    const modal = q('#ni-inj-preview-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function niRunInjectionPreviewRecall() {
+    const cfg = extension_settings[EXT_NAME] || {};
+    niRenderInjectionPreview({ busy: true });
+    try {
+        const plan = niResolveStageInjectionExecutionPlan(cfg);
+        const ctx = getContext?.();
+        const chat = ctx?.chat || [];
+        if (plan.vectorInjectionDisabled) {
+            niRenderInjectionPreview({ recallError: '已手动关闭向量召回' });
+            return;
+        }
+        if (!plan.vectorRecallScope.currentStages.length && !plan.vectorRecallScope.historicalStages.length) {
+            niRenderInjectionPreview({ recallError: '没有可召回的阶段' });
+            return;
+        }
+        const { nodeRecallContext, lightRecallContext, weightedQueries, keywordTerms } =
+            niBuildVectorRecallInputs(plan, chat);
+        if (!weightedQueries.length) {
+            niRenderInjectionPreview({ recallError: '没有可用的对话消息' });
+            return;
+        }
+        const recallText = await recallRelevantWeighted(weightedQueries, plan.vectorRecallScope.currentStages, {
+            lightRecallContext,
+            nodeRecallContext,
+            historicalStages: plan.vectorRecallScope.historicalStages,
+            historyTopK: cfg.vecHistoryTopK ?? DEFAULT_SETTINGS.vecHistoryTopK,
+            keepTopN: cfg.vecKeepTopN ?? DEFAULT_SETTINGS.vecKeepTopN,
+            splitSections: true,
+            keywordTerms,
+            inferAnchorStage: !plan.curTbNode,
+            excludeChunkIdxs: plan.blockedRecallChunkIdxs,
+        });
+        niRenderInjectionPreview({ recallText: String(recallText || '') });
+    } catch (e) {
+        console.warn('[NI] 预览召回失败:', e);
+        niRenderInjectionPreview({ recallError: e?.message || '未知错误' });
+    }
+}
+
 /**
  * 组装本轮要发的「未来剧情预告」。没开启、没有可用的后续阶段、或者取不到正文时返回 null。
  *
@@ -3333,8 +3718,11 @@ function niBuildFuturePlotInjectionPayload(plan, cfg = extension_settings[EXT_NA
         blockedChunkIdxs: plan.blockedRecallChunkIdxs || [],
         currentStageIdx: plan.directStageCurrentIdx,
         // 穿书模式知道「正在演哪个节点」，当前阶段就从它的下一个节点开始取，
-        // 已经演过的不再重复发；普通模式没有逐节点进度，从头取。
-        startAfterNodeId: plan.curTbNode ? niPlotNodeId(plan.curTbNode) : null,
+        // 已经演过的不再重复发；普通模式用「进度锚点」里手动指定的节点，
+        // 没设锚点才从头取。
+        startAfterNodeId: plan.curTbNode
+            ? niPlotNodeId(plan.curTbNode)
+            : (niGetProgressAnchorNodeId(cfg) || null),
         getCompressedChunkText: chunkIdx => (S.chunkResults[chunkIdx] && S.chunkResults[chunkIdx].trim())
             ? S.chunkResults[chunkIdx]
             : (S.chunks[chunkIdx] || ''),
@@ -3358,9 +3746,12 @@ function niUpdateVecOffBtn() {
         fullInjectStageIdx: plan.fullStageInjectionStageIdx,
         fullInjectApplied: plan.fullStageInjectionApplied,
     });
-    niUpdateStageInjectionBudgetNote();
+    niUpdateStageInjectionBudgetNote(null, { plan });
     niUpdateStageFullInjectUI(plan, uiState);
     niUpdateFuturePlotUI(plan);
+    niUpdateStageInjSummary(plan);
+    niUpdateStageInjPanel();
+    niUpdateProgressAnchorUI();
     // 无向量数据时隐藏按钮，始终显示未向量注入模式选择器
     if (!uiState.hasAnyVector) {
         if (btn) btn.style.display = 'none';
@@ -3686,6 +4077,82 @@ function niBuildCurrentStageNodeRecallQuery(scope, curTbNode) {
     return niBuildStageNodeVectorQuery(nodes, { maxNodes: 8, maxTextLength: 2600 });
 }
 
+/**
+ * 组装「原著角色人设」注入正文。注入主链和「注入预览」共用同一个构造函数，
+ * 避免预览看到的内容和真正发出去的内容各写一套、慢慢跑偏。
+ */
+function niBuildCharInjectionText() {
+    const charLines = [];
+    if (S.characters.length) {
+        const userSubCfg = niGetUserSubConfig();
+        S.characters.forEach((c, idx) => {
+            if (!c.name) return;
+            if (c.enabled === false) return;
+            if (niIsUserSubReplaceSelectedChar(idx, userSubCfg)) return;
+            const isUserSubPlayChar = niIsUserSubSelectedChar(idx, userSubCfg) && niIsUserSubPlayMode(userSubCfg);
+            const lines = isUserSubPlayChar
+                ? [`[用户扮演原著角色资料：<user>（原著角色：${c.name}；${c.role || '其他'}）]`]
+                : [`[原著角色NPC：${c.name}（${c.role || '其他'}）]`];
+            const showRaw = c.showRaw !== false;
+            const showAi  = niGetCharAiShowEnabled(idx);
+            const aiProfile = niGetCharAiProfile(idx);
+            if (showAi && aiProfile) {
+                if (typeof aiProfile === 'object') {
+                    const p = aiProfile;
+                    if (p.identity)    lines.push(`身份：${p.identity}`);
+                    if (p.appearance)  lines.push(`外貌：${p.appearance}`);
+                    if (p.personality) lines.push(`性格：${p.personality}`);
+                    if (p.relations)   lines.push(`关系：${p.relations}`);
+                } else {
+                    lines.push(aiProfile);
+                }
+            } else if (showRaw) {
+                if (c.identity)    lines.push(`身份：${c.identity}`);
+                if (c.appearance)  lines.push(`外貌：${c.appearance}`);
+                if (c.personality) lines.push(`性格：${c.personality}`);
+                if (c.relations)   lines.push(`关系：${c.relations}`);
+            }
+            if (lines.length > 1) charLines.push(lines.join('\n'));
+        });
+    }
+    if (!charLines.length) return '';
+    const userSubCfg = niGetUserSubConfig();
+    const charIntro = userSubCfg.userSubEnabled
+        ? (niIsUserSubPlayMode(userSubCfg)
+            ? '说明：以下为原著角色资料。标记为“用户扮演原著角色资料：<user>”的条目属于 <user> 的既有身份与人物基础，不是独立NPC；其他角色仍作为NPC演绎。'
+            : '说明：以下原著角色NPC资料。已由“用户代入角色”映射到 <user> 的原著角色不会在此处作为独立NPC发送；其他角色仍作为NPC演绎。')
+        : '说明：以下原著角色默认作为故事中的独立NPC处理，不默认等同于 <user>；不要把原著角色经历、剧情事件、身份关系或原著角色曾经做出的选择自动映射到 <user>。';
+    return `[原著角色人设]\n${charIntro}\n\n${charLines.join('\n\n')}\n[/原著角色人设]`;
+}
+
+/**
+ * 组装向量召回用的加权查询。注入主链与「注入预览」共用这一份，
+ * 保证预览里「跑一次真实召回」看到的就是真正会发出去的那批片段。
+ */
+function niBuildVectorRecallInputs(plan, chat = []) {
+    const cfg = extension_settings[EXT_NAME] || {};
+    const { curTbNode, vectorRecallScope } = plan || {};
+    const nodeRecallContext = curTbNode
+        ? niBuildTbLightRecallContext(curTbNode, { nodes: getAllPlotsInStoryOrder(S) })
+        : null;
+    const lightRecallContext = cfg.tbLightRecallMode ? nodeRecallContext : null;
+    const nodeContext = niBuildCurrentStageNodeRecallQuery(vectorRecallScope, curTbNode);
+
+    // 按用户设置取消息条数；各条消息单独提取后加权召回
+    const msgTag    = (cfg.vecMsgTag || '').trim();
+    const msgCount  = cfg.vecMsgCount ?? DEFAULT_SETTINGS.vecMsgCount;
+    const recentMsgs = niSelectRecentVectorMessageTexts(chat, msgCount, msgTag);
+
+    // 构造加权 queries：最新条权重1.0，每往前一条×0.5
+    // nodeContext 拼入最新一条
+    const weightedQueries = niBuildWeightedVectorQueries(recentMsgs, { nodeContext });
+    const keywordTerms = niBuildVectorRecallKeywordTerms(
+        weightedQueries.map(query => query.text),
+        niGetCurrentStageRecallNodes(vectorRecallScope),
+    );
+    return { nodeRecallContext, lightRecallContext, weightedQueries, keywordTerms };
+}
+
 async function onPromptReady(eventData) {
     if (eventData?.dryRun) return;
     // 插件总开关
@@ -3752,26 +4219,12 @@ async function onPromptReady(eventData) {
     if (!vectorInjectionDisabled && (
         vectorRecallScope.currentStages.length || vectorRecallScope.historicalStages.length
     )) {
-        const nodeRecallContext = curTbNode
-            ? niBuildTbLightRecallContext(curTbNode, { nodes: getAllPlotsInStoryOrder(S) })
-            : null;
-        const lightRecallContext = extension_settings[EXT_NAME]?.tbLightRecallMode
-            ? nodeRecallContext
-            : null;
-        const nodeContext = niBuildCurrentStageNodeRecallQuery(vectorRecallScope, curTbNode);
-
-        // 按用户设置取消息条数；各条消息单独提取后加权召回
-        const msgTag    = (extension_settings[EXT_NAME]?.vecMsgTag || '').trim();
-        const msgCount  = extension_settings[EXT_NAME]?.vecMsgCount ?? DEFAULT_SETTINGS.vecMsgCount;
-        const recentMsgs = niSelectRecentVectorMessageTexts(chat, msgCount, msgTag);
-
-        // 构造加权 queries：最新条权重1.0，每往前一条×0.5
-        // nodeContext 拼入最新一条
-        const weightedQueries = niBuildWeightedVectorQueries(recentMsgs, { nodeContext });
-        const keywordTerms = niBuildVectorRecallKeywordTerms(
-            weightedQueries.map(query => query.text),
-            niGetCurrentStageRecallNodes(vectorRecallScope),
-        );
+        const {
+            nodeRecallContext,
+            lightRecallContext,
+            weightedQueries,
+            keywordTerms,
+        } = niBuildVectorRecallInputs(stageInjectionPlan, chat);
 
         if (weightedQueries.length) {
             try {
@@ -3844,48 +4297,9 @@ async function onPromptReady(eventData) {
         }
     }
 
-    // ③ 角色人设注入
-    const charLines = [];
-    if (S.characters.length) {
-        const userSubCfg = niGetUserSubConfig();
-        S.characters.forEach((c, idx) => {
-            if (!c.name) return;
-            if (c.enabled === false) return;
-            if (niIsUserSubReplaceSelectedChar(idx, userSubCfg)) return;
-            const isUserSubPlayChar = niIsUserSubSelectedChar(idx, userSubCfg) && niIsUserSubPlayMode(userSubCfg);
-            const lines = isUserSubPlayChar
-                ? [`[用户扮演原著角色资料：<user>（原著角色：${c.name}；${c.role || '其他'}）]`]
-                : [`[原著角色NPC：${c.name}（${c.role || '其他'}）]`];
-            const showRaw = c.showRaw !== false;
-            const showAi  = niGetCharAiShowEnabled(idx);
-            const aiProfile = niGetCharAiProfile(idx);
-            if (showAi && aiProfile) {
-                if (typeof aiProfile === 'object') {
-                    const p = aiProfile;
-                    if (p.identity)    lines.push(`身份：${p.identity}`);
-                    if (p.appearance)  lines.push(`外貌：${p.appearance}`);
-                    if (p.personality) lines.push(`性格：${p.personality}`);
-                    if (p.relations)   lines.push(`关系：${p.relations}`);
-                } else {
-                    lines.push(aiProfile);
-                }
-            } else if (showRaw) {
-                if (c.identity)    lines.push(`身份：${c.identity}`);
-                if (c.appearance)  lines.push(`外貌：${c.appearance}`);
-                if (c.personality) lines.push(`性格：${c.personality}`);
-                if (c.relations)   lines.push(`关系：${c.relations}`);
-            }
-            if (lines.length > 1) charLines.push(lines.join('\n'));
-        });
-    }
-    if (charLines.length) {
-        const userSubCfg = niGetUserSubConfig();
-        const charIntro = userSubCfg.userSubEnabled
-            ? (niIsUserSubPlayMode(userSubCfg)
-                ? '说明：以下为原著角色资料。标记为“用户扮演原著角色资料：<user>”的条目属于 <user> 的既有身份与人物基础，不是独立NPC；其他角色仍作为NPC演绎。'
-                : '说明：以下为原著角色NPC资料。已由“用户代入角色”映射到 <user> 的原著角色不会在此处作为独立NPC发送；其他角色仍作为NPC演绎。')
-            : '说明：以下原著角色默认作为故事中的独立NPC处理，不默认等同于 <user>；不要把原著角色经历、剧情事件、身份关系或原著角色曾经做出的选择自动映射到 <user>。';
-        const charContent = `[原著角色人设]\n${charIntro}\n\n${charLines.join('\n\n')}\n[/原著角色人设]`;
+    // ③ 角色人设注入（取文与「注入预览」共用 niBuildCharInjectionText，两边不会跑偏）
+    const charContent = niBuildCharInjectionText();
+    if (charContent) {
         doInject(`${EXT_NAME}_char`, charContent, charPos, charDepth, charRole);
     }
 
@@ -4261,13 +4675,47 @@ jQuery(async () => {
         niSaveSettings();
         niUpdateVecOffBtn();
     });
+    // 「注入策略」横条：点一下展开/收起，回车与空格同样有效
+    $app.on('click', '#ni-stage-inj-bar', () => niToggleStageInjPanel());
+    $app.on('keydown', '#ni-stage-inj-bar', (ev) => {
+        const key = ev?.key;
+        if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') return;
+        ev.preventDefault();
+        niToggleStageInjPanel();
+    });
+    // 进度锚点：第几阶段 / 阶段里的哪个节点 / 一键回到自动
+    $app.on('change', '#ni-progress-stage', () => {
+        const total = Math.trunc(Number(S.stageMapN)) || 0;
+        let stage = Math.trunc(Number(q('#ni-progress-stage')?.value)) || 0;
+        if (!Number.isFinite(stage) || stage < 0) stage = 0;
+        if (total > 0 && stage > total) stage = total;
+        niSetProgressAnchor(stage, null, { resetNode: true });
+    });
+    $app.on('change', '#ni-progress-node', () => {
+        const cfg = extension_settings[EXT_NAME] || {};
+        niSetProgressAnchor(cfg.progressStageIdx || 0, String(q('#ni-progress-node')?.value || ''));
+    });
+    $app.on('click', '#ni-progress-clear', () => {
+        niSetProgressAnchor(0, '', { resetNode: true });
+    });
+    // 「预览」按钮：在折叠条里，点它只开预览，不触发上面的展开/收起
+    $app.on('click', '#ni-inj-preview-open', (ev) => {
+        ev?.stopPropagation?.();
+        niOpenInjectionPreview();
+    });
+    $app.on('click', '#ni-inj-preview-close', () => niCloseInjectionPreview());
+    $app.on('click', '#ni-inj-preview-recall', () => niRunInjectionPreviewRecall());
+    $app.on('click', '#ni-inj-preview-modal', (ev) => {
+        // 点背景（而不是弹窗本体）时关闭
+        if (ev?.target?.id === 'ni-inj-preview-modal') niCloseInjectionPreview();
+    });
     // 未来剧情预告：把「当前阶段之后」若干阶段的剧情提前注入。
     $app.on('click', '#ni-stage-future-inject', () => {
         if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
         const cfg = extension_settings[EXT_NAME];
         cfg.futurePlotPreview = !niIsFuturePlotInjectionEnabled(cfg);
         niSaveSettings();
-        niUpdateFuturePlotUI();
+        niRefreshInjStrategyUi();
     });
     // 只在 change（失焦/回车）时读值并回写：输入过程中不要把输入框改回旧值，
     // 否则想清空重填时会一直被弹回去。
@@ -4283,14 +4731,14 @@ jQuery(async () => {
             DEFAULT_SETTINGS.futurePlotNodes,
         );
         niSaveSettings();
-        niUpdateFuturePlotUI();
+        niRefreshInjStrategyUi();
     });
     // 「当前阶段剩下的节点也算进预告」勾选框
     $app.on('change', '#ni-future-include-cur', () => {
         if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
         extension_settings[EXT_NAME].futurePlotIncludeCurrent = q('#ni-future-include-cur')?.checked !== false;
         niSaveSettings();
-        niUpdateFuturePlotUI();
+        niRefreshInjStrategyUi();
     });
 
     // 开关：启用/禁用演绎提示词
@@ -5146,6 +5594,7 @@ jQuery(async () => {
             return;
         }
         niApplyBlockAction(action, stageIdx);
+        niUpdateStageInjSummary();
     });
     $app.on('change', '.ni-pin-block-chk', function(e) {
         e.stopPropagation();
@@ -5155,6 +5604,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         niApplyStageBlockAction(String($(this).data('stage-block-action') || ''));
+        niUpdateStageInjSummary();
     });
     $app.on('change', '.ni-stg-block-chk', function(e) {
         e.stopPropagation();

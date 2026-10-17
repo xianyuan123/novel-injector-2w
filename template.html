@@ -1395,7 +1395,26 @@
             <textarea id="ni-stage-pt-content" class="ni-pt-textarea" spellcheck="false"></textarea>
           </div>
         </div>
-        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按右侧「未向量注入」模式注入；关闭 → 完全跳过。开启「当前阶段全量直注」后，当前阶段整段直注，更早阶段仍按向量召回。「未来剧情预告」把当前阶段还没演到的节点和后面几个阶段的剧情提前给 AI 看，帮它把握走向。列表上方的「召回屏蔽·全局」可一键屏蔽当前阶段之前的全部阶段，或勾选任意几个阶段整段屏蔽。</div>
+        <div class="ni-stage-inj-bar" id="ni-stage-inj-bar" role="button" tabindex="0" aria-controls="ni-stage-inj-body" aria-expanded="false" title="点开调整注入策略：当前阶段全量直注 / 未来剧情预告 / 召回屏蔽">
+          <span class="ni-stage-inj-bar-title"><i class="ti ti-sliders"></i>注入策略</span>
+          <span class="ni-stage-inj-summary" id="ni-stage-inj-summary">—</span>
+          <button class="ni-stage-inj-preview" id="ni-inj-preview-open" type="button" title="看看这一轮到底会发出去什么"><i class="ti ti-eye"></i>预览</button>
+          <i class="ti ti-chevron-down ni-stage-inj-chevron"></i>
+        </div>
+        <div class="ni-stage-inj-body" id="ni-stage-inj-body">
+        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按「未向量注入」模式整段注入；关闭 → 跳过。下面三组开关分别管：当前阶段整段直注、未来剧情预告、召回屏蔽。</div>
+        <div class="ni-stage-progress-row" id="ni-stage-progress-row">
+          <span class="ni-stage-progress-label" title="告诉插件你演到哪了：全量直注取这一阶段，未来预告从这一阶段的这个节点之后开始。0 = 自动（取最后开启的阶段）。"><i class="ti ti-map-pin"></i>进度锚点</span>
+          <label class="ni-stage-progress-field">第
+            <input type="number" id="ni-progress-stage" min="0" max="999" step="1" value="0" aria-label="当前演到第几阶段，0 为自动">
+            阶段
+          </label>
+          <select id="ni-progress-node" class="ni-stage-progress-node" aria-label="当前演到该阶段的哪个节点" title="选中的节点会被视为「已经演过」，未来的预告从它后面开始">
+            <option value="">从阶段开头</option>
+          </select>
+          <button class="ni-bulk-btn off" id="ni-progress-clear" type="button" title="清掉锚点，回到自动判断"><i class="ti ti-eraser"></i>自动</button>
+          <span class="ni-stage-progress-hint" id="ni-stage-progress-hint"></span>
+        </div>
         <div class="ni-stage-bulk-row">
           <div class="ni-stage-inj-mode-wrap">
             <label class="ni-stage-inj-mode-lbl">未向量注入</label>
@@ -1433,6 +1452,8 @@
           <span class="ni-stage-block-hint" id="ni-stage-block-hint"></span>
         </div>
         <div class="ni-stage-budget-note" id="ni-stage-inj-budget-note" style="display:none">未向量阶段单轮注入上限：32000 Token</div>
+        </div>
+
         <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
           <label class="ni-pagination-size">每 <input type="number" id="ni-stage-page-size" value="20" min="1" max="200" step="1" aria-label="每页阶段数"> 一页</label>
           <div class="ni-pagination-current">
@@ -1454,6 +1475,21 @@
       <pre class="ni-vec-debug-content" id="ni-clean-done-content"></pre>
       <div class="ni-modal-btns">
         <button class="ni-modal-confirm" id="ni-clean-done-close">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 本轮注入预览：把这一轮真正会发出去的内容按注入段列出来 -->
+  <div class="ni-modal-bg" id="ni-inj-preview-modal" style="display:none">
+    <div class="ni-modal ni-inj-preview-card" role="dialog" aria-modal="true" aria-labelledby="ni-inj-preview-title">
+      <div class="ni-modal-title" id="ni-inj-preview-title">本轮注入预览</div>
+      <div class="ni-inj-preview-sum" id="ni-inj-preview-sum"></div>
+      <div class="ni-inj-preview-list" id="ni-inj-preview-list"></div>
+      <div class="ni-inj-preview-actions">
+        <button class="ni-bulk-btn off" id="ni-inj-preview-recall" title="用最新几条消息真的跑一次向量召回（会消耗一次 embedding 调用）"><i class="ti ti-search"></i>跑一次真实召回</button>
+      </div>
+      <div class="ni-modal-btns">
+        <button class="ni-modal-confirm" id="ni-inj-preview-close">关闭</button>
       </div>
     </div>
   </div>
