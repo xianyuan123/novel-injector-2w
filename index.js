@@ -3866,7 +3866,13 @@ function niCloseOffscreenModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// 穿书状态栏里的「后台动向」按钮要用到这两个（跨文件调用）
+window.niRunOffscreenSimulation = niRunOffscreenSimulation;
+window.niOpenOffscreenModal = niOpenOffscreenModal;
+
 function niUpdateOffscreenStatus() {
+    // 状态栏里的「后台动向」和弹窗共用同一份数据，一起刷新
+    try { window.niTbRenderOffscreenBar?.(); } catch (e) { console.warn('[NI] 后台动向状态栏刷新失败:', e); }
     const el = q('#ni-offscreen-status');
     if (!el) return;
     const cfg = niOffscreenSettings();
@@ -5054,6 +5060,10 @@ jQuery(async () => {
     // 输入框用 input 事件实时回写（只在设置弹窗里，不碰小说数据）
     $app.on('input', '#ni-off-pov, #ni-off-api-url, #ni-off-api-model, #ni-off-api-key', () => {
         niSaveOffscreenSettingsFromUi();
+    });
+    // 状态栏（穿书界面）里删条目也会改同一份数据，这里把弹窗跟着刷新
+    document.addEventListener('ni:offscreen-changed', () => {
+        try { niRenderOffscreenThreads(); } catch (e) { console.warn('[NI] 后台动向同步失败:', e); }
     });
     // 未来剧情预告：把「当前阶段之后」若干阶段的剧情提前注入。
     $app.on('click', '#ni-stage-future-inject', () => {
