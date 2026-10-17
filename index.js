@@ -224,6 +224,13 @@ import {
 } from './lib/prompts.js';
 
 import {
+    NI_DEFAULT_ADVANCE_JUDGE_PROMPT,
+    niBuildAdvanceJudgeMessages,
+    niParseAdvanceJudgeReply,
+    niDecideAutoAdvance,
+} from './lib/advance-judge.js';
+
+import {
     NI_THEME_DEFAULT,
     createThemeEditor,
     niApplyStatusbarTheme,
@@ -2280,6 +2287,7 @@ const {
     requestAnimationFrame: (...args) => requestAnimationFrame(...args),
     Event,
     defaultAdvancePrompt: TB_DEFAULT_ADVANCE_PROMPT,
+    defaultAdvanceJudgePrompt: NI_DEFAULT_ADVANCE_JUDGE_PROMPT,
     defaultInferPrompt: TB_DEFAULT_INFER_PROMPT,
     defaultOpeningPrompt: TB_DEFAULT_OPENING_PROMPT,
     defaultOngoingPrompt: TB_DEFAULT_ONGOING_PROMPT,
@@ -6095,6 +6103,86 @@ jQuery(document).ready(function () {
     // 以前两个事件各排一个 100ms 定时器，状态栏被重建两遍（视图还被重置两次）。
     // 这里合并成一次，只保留最后一个定时器。
     let niStoryBarRenderTimer = 0;
+    // ============================================================
+    // 自动推进 — 用当前对话模型或插件 API 判断节点是否演完
+    // ============================================================
+    let _niAutoAdvanceBusy = false;
+    let _niAutoAdvanceEligibleTicks = 0;
+
+    // 只取最近若干字对话：判定不需要全文，越靠后越重要。
+    function niCollectAutoAdvanceChat(maxChars = 4000) {
+        const chatArr = typeof chat !== 'undefined' && Array.isArray(chat) ? chat : [];
+        const lines = [];
+        let used = 0;
+        for (let i = chatArr.length - 1; i >= 0 && used < maxChars; i--) {
+            const m = chatArr[i];
+            if (!m || m.is_system) continue;
+            const text = String(m.mes || '').trim();
+            if (!text) continue;
+            const who = m.is_user ? (m.name || '用户') : (m.name || '角色');
+            let line = `${who}：${text}`;
+            if (line.length > 1200) line = `${line.slice(0, 1200)}…`;
+            lines.unshift(line);
+            used += line.length;
+        }
+        return lines.join('\n');
+    }
+
+    async function niTbMaybeAutoAdvance() {
+        if (_niAutoAdvanceBusy) return { skipped: 'busy' };
+        _niAutoAdvanceBusy = true;
+        try {
+            const ctx = window.niTbGetAutoAdvanceContext?.();
+            if (!ctx) return { skipped: 'no-context' };
+            if (!ctx.enabled) return { skipped: 'disabled' };
+            if (ctx.paused) return { skipped: 'paused' };
+            if (ctx.judging || ctx.advancing) return { skipped: 'inflight' };
+            if (!ctx.curNode || ctx.curNode.done) return { skipped: 'no-current-node' };
+
+            const cfg = extension_settings[EXT_NAME] || {};
+            const every = Math.max(1, Math.min(10, Number(cfg.tbAutoAdvanceEvery) || 1));
+            _niAutoAdvanceEligibleTicks++;
+            if (every > 1 && (_niAutoAdvanceEligibleTicks % every) !== 0) {
+                return { skipped: 'every', tick: _niAutoAdvanceEligibleTicks };
+            }
+
+            const messages = niBuildAdvanceJudgeMessages({
+                stageTitle: ctx.stageTitle,
+                nodeTitle: ctx.curNode.title || '',
+                nodeText: ctx.curNode.body || ctx.curNode.text || '',
+                recentChat: niCollectAutoAdvanceChat(),
+                prompt: cfg.tbAutoAdvancePrompt || NI_DEFAULT_ADVANCE_JUDGE_PROMPT,
+            });
+
+            window.niTbSetAutoAdvanceJudging?.(true);
+            let raw = '';
+            const startedAt = Date.now();
+            try {
+                if ((cfg.tbAutoAdvanceModel || 'current') === 'plugin') {
+                    raw = await callCleanApi(messages, {});
+                } else {
+                    raw = await niGenerateWithTavernMainPreset(messages, { responseLength: 200 });
+                }
+            } catch (e) {
+                // 判定失败不推进、也不弹错：下一轮回复会再判一次。
+                console.warn('[NI] 自动推进判定失败:', e);
+                return { error: e };
+            } finally {
+                window.niTbSetAutoAdvanceJudging?.(false);
+            }
+
+            const verdict = niParseAdvanceJudgeReply(raw);
+            const advance = niDecideAutoAdvance(verdict, Number(cfg.tbAutoAdvanceThreshold));
+            console.debug?.('[NI] 自动推进判定', { ms: Date.now() - startedAt, verdict, advance });
+            if (!advance) return { advance: false, verdict };
+
+            const result = await window.niTbAdvanceOneNode?.(ctx.curNode);
+            return { advance: true, verdict, result };
+        } finally {
+            _niAutoAdvanceBusy = false;
+        }
+    }
+
     const onRendered = (messageId) => {
         if (!extension_settings[EXT_NAME]?.transBookMode) return;
         clearTimeout(niStoryBarRenderTimer);
@@ -6106,6 +6194,18 @@ jQuery(document).ready(function () {
 
     // 真正生成新消息时解钉预览节点：之后的重挂载才允许自动回正到当前节点
     eventSource.on(event_types.MESSAGE_RECEIVED, () => niTbUnpinView());
+
+    // 自动推进：每条 AI 回复结束后判定一次「当前节点是否演完」。
+    // 放在 MESSAGE_RECEIVED 里而不是 RENDERED，因为 RENDERED 会因重绘重复触发。
+    eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+        if (!extension_settings[EXT_NAME]?.transBookMode) return;
+        // 延迟一拍，等消息真正进 chat 数组、也等上面解钉完成。
+        setTimeout(() => {
+            // MESSAGE_RECEIVED 一般只对 AI 消息触发，但代理/扩展可能复用到用户消息上，再挡一层。
+            if (Array.isArray(chat) && chat[chat.length - 1]?.is_user) return;
+            niTbMaybeAutoAdvance().catch(e => console.warn('[NI] 自动推进异常:', e));
+        }, 300);
+    });
     eventSource.on(event_types.MESSAGE_SENT,     () => niTbUnpinView());
 
     // 切换对话：重置状态，重新加载

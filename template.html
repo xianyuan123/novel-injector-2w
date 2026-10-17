@@ -718,18 +718,41 @@
           <div class="ni-field" style="margin-top:10px;margin-bottom:0">
             <div style="display:flex;align-items:center;justify-content:space-between">
               <label style="display:flex;align-items:center;gap:5px">
-                <i class="ti ti-arrow-right" style="font-size:12px"></i>手动一键推进
-                <span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">状态栏快捷按钮</span>
+                <i class="ti ti-wand" style="font-size:12px"></i>自动推进
+                <span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">模型判定节点是否演完</span>
               </label>
               <label class="ni-toggle-wrap">
-                <input type="checkbox" id="ni-tb-quick-advance">
+                <input type="checkbox" id="ni-tb-auto-advance">
                 <span class="ni-cfg-chk"><i class="ti ti-check"></i></span>
               </label>
             </div>
+            <div style="display:flex;align-items:flex-end;gap:10px;margin-top:8px;flex-wrap:wrap">
+              <div class="ni-field" style="margin-bottom:0;flex:1;min-width:140px">
+                <label>判定模型</label>
+                <select id="ni-tb-auto-advance-model">
+                  <option value="current">当前对话模型</option>
+                  <option value="plugin">插件里配置的 API</option>
+                </select>
+              </div>
+              <div class="ni-field" style="margin-bottom:0;width:118px">
+                <label>每 N 条回复判定</label>
+                <input type="number" id="ni-tb-auto-advance-every" value="1" min="1" max="10">
+              </div>
+              <div class="ni-field" style="margin-bottom:0;width:110px">
+                <label>置信度阈值</label>
+                <input type="number" id="ni-tb-auto-advance-threshold" value="0.70" min="0" max="1" step="0.05">
+              </div>
+            </div>
+            <label class="ni-toggle-label" style="margin-top:8px">
+              <input type="checkbox" id="ni-tb-auto-cross-stage">
+              <span class="ni-cfg-chk"><i class="ti ti-check"></i></span>
+              <span>本阶段走完自动进入下一阶段</span>
+            </label>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;line-height:1.6">
-              ① 开启后，聊天界面的穿书状态栏上会多一个「推进」按钮；点一下就把当前节点标记完成，并前进到本阶段的下一节点，同时注入 AI 推进提示词。<br>
-              ② 只在同一个阶段内推进：走到本阶段最后一个节点就停住，并提示下一阶段的首节点标题；跨阶段仍然由你点「切换阶段」菜单决定，插件不会自己跳阶段。<br>
-              ③ 关闭时按钮隐藏，不影响卡片上原有的勾选归档操作。
+              ① 每条 AI 回复结束后，用上面选的模型判断「当前节点是否已经演完」；演完就把节点标记完成并前进到本阶段下一个节点，同时注入 AI 推进提示词。<br>
+              ② 判定依据是节点原文 + 最近对话；拿不准时不推进 —— 宁可晚一轮，也不提前跳节点。<br>
+              ③ 每次判定会额外发一次很短的请求（只要一行 JSON）；嫌费额度就把「每 N 条回复判定」调大。<br>
+              ④ 关掉「自动进入下一阶段」时，本阶段走完会停住并提示下一阶段的首节点标题，由你手动点「切换阶段」。
             </div>
           </div>
         </div>
@@ -745,6 +768,19 @@
                 <button class="ni-pt-reset" id="ni-tb-advance-reset" title="恢复默认" style="position:static;opacity:.6"><i class="ti ti-rotate"></i></button>
               </div>
               <textarea id="ni-tb-advance-prompt" class="ni-pt-textarea" rows="7" spellcheck="false" style="font-size:11px;line-height:1.6;padding:8px 10px;border:.5px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);resize:vertical;width:100%;font-family:inherit"></textarea>
+            </div>
+
+            <!-- 自动推进判定提示词-->
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                <label style="font-size:12px;color:var(--color-text-secondary)"><i class="ti ti-scale" style="font-size:11px"></i> 自动推进判定提示词（只喂给判定模型，不进正文）</label>
+                <button class="ni-pt-reset" id="ni-tb-advance-judge-reset" title="恢复默认" style="position:static;opacity:.6"><i class="ti ti-rotate"></i></button>
+              </div>
+              <textarea id="ni-tb-advance-judge-prompt" class="ni-pt-textarea" rows="9" spellcheck="false" style="font-size:11px;line-height:1.6;padding:8px 10px;border:.5px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);resize:vertical;width:100%;font-family:inherit"></textarea>
+              <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px;line-height:1.6">
+                可用占位符：<code>{STAGE_TITLE}</code> 阶段标题、<code>{NODE_TITLE}</code> 节点标题、<code>{NODE_BODY}</code> 节点原文（默认截到 3000 字）、<code>{RECENT_CHAT}</code> 最近对话（默认截到 4000 字）。<br>
+                模型必须只回一行 JSON：<code>{"completed": true/false, "confidence": 0~1, "reason": "一句话"}</code>；解析不出来时按「没演完」处理。
+              </div>
             </div>
 
             <!-- 持续提示词-->
