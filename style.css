@@ -682,12 +682,10 @@
 .ni-timeout-label i { font-size: 13px; color: var(--color-text-tertiary); }
 .ni-stream-timeout-row .ni-kb-inp { padding-left: 0px; padding-right: 0px; }
 #ni-app #ni-vec-batch-size {
-  width: 20px !important;
+  /* 以前 width:20px + appearance:none：下拉箭头被抹掉、两位数（16/20/32）被裁掉一半。
+     现在留出足够宽度并保留原生箭头，用户看得出这里能点。 */
+  min-width: 56px !important;
   padding: 2px 4px !important;
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  background-image: none !important;
   text-align: center !important;
   text-align-last: center !important;
   cursor: pointer;

@@ -489,7 +489,7 @@
             </div>
             <div class="ni-inj-row" style="margin-top:8px">
               <div class="ni-field" style="margin-bottom:0">
-                <label title="向量化时每个索引块的字符数，默认 1500。&#10;&#10;调大：块更完整、上下文更连贯，但召回时一次带回的无关内容也更多。&#10;调小：匹配更精准，但同一段剧情会被切成更多块。&#10;&#10;注意：改动后需要重新向量化才会按新粒度建索引。">向量块切分（字） <i class="ti ti-info-circle" style="font-size:11px;opacity:.5"></i></label>
+                <label title="向量化时每个索引块的字符数，默认 1000。&#10;&#10;调大：块更完整、上下文更连贯，但召回时一次带回的无关内容也更多。&#10;调小：匹配更精准，但同一段剧情会被切成更多块。&#10;&#10;注意：改动后需要重新向量化才会按新粒度建索引。">向量块切分（字） <i class="ti ti-info-circle" style="font-size:11px;opacity:.5"></i></label>
                 <input type="number" id="ni-vec-chunk-chars" value="1000" min="200" max="4000" step="100">
               </div>
               <div></div>
@@ -1629,7 +1629,6 @@
 .ni-barcode{display:flex;gap:1.5px;justify-content:center;align-items:flex-end;height:32px;margin:0 auto 3px}
 .ni-barcode span{display:inline-block;background:linear-gradient(to bottom,#f0a8be,#d4a0b4)}
 .ni-barcode-time{text-align:center;font-size:8px;color:#d0a0b0;letter-spacing:.10em;padding-top:3px}
-.ni-barcode-time{text-align:center;font-size:8px;color:#d0a0b0;letter-spacing:.10em;padding-top:3px}
 .ni-barcode-txt{text-align:center;font-size:8px;color:#d0a0b0;letter-spacing:.14em;padding-bottom:4px}
 .ni-arr-u{display:inline-block;width:7px;height:7px;border:2px solid currentColor;border-width:2px 2px 0 0;transform:rotate(-45deg);margin-top:3px;border-radius:1px}
 .ni-arr-d{display:inline-block;width:7px;height:7px;border:2px solid currentColor;border-width:2px 2px 0 0;transform:rotate(135deg);margin-top:-2px;border-radius:1px}
@@ -1671,7 +1670,7 @@
         <div class="ni-pop-stage-row" id="ni-pop-stage-row">
           <span class="ni-stage-lbl">商品</span>
           <span class="ni-stage-val" id="ni-pop-stage-val">—</span>
-          <span id="ni-pop-stage-arrow"></span>
+          <span id="ni-pop-stage-arrow"><span class="ni-arr-d"></span></span>
         </div>
         <div class="ni-stage-drop" id="ni-pop-stage-drop"></div>
         <div class="ni-col-hd">
@@ -1693,7 +1692,7 @@
         <div class="ni-infer-sec" id="ni-pop-infer-sec">
           <div class="ni-infer-tog" id="ni-pop-infer-tog">
             <span class="ni-infer-lbl">✦ 下一步行动选项，点击填入输入框</span>
-            <span id="ni-pop-infer-chev"></span>
+            <span id="ni-pop-infer-chev"><span class="ni-arr-d"></span></span>
           </div>
           <div class="ni-infer-items" id="ni-pop-infer-items"></div>
         </div>

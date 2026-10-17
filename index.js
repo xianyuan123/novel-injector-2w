@@ -86,6 +86,8 @@ import {
     niBuildTbNodeVectorQuery,
     niBuildStageNodeVectorQuery,
     niBuildWeightedVectorQueries,
+    niClearVectorRecallError,
+    niGetVectorRecallError,
     niResolveVectorRecallStageScopes,
     niSelectRecentVectorMessageTexts,
     splitText,
@@ -766,11 +768,12 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
     cfg.vecKey      = q('#ni-vec-key')?.value || cfg.vecKey;
     cfg.vecUrl      = q('#ni-vec-url')?.value || cfg.vecUrl;
     cfg.vecModel    = q('#ni-vec-model')?.value || cfg.vecModel;
-    cfg.injDepth    = parseInt(q('#ni-inj-depth')?.value) || DEFAULT_SETTINGS.injDepth;
-    cfg.vecInjPos   = parseInt(q('#ni-vec-inj-pos')?.value) ?? DEFAULT_SETTINGS.vecInjPos;
-    cfg.vecInjRole  = parseInt(q('#ni-vec-inj-role')?.value) ?? DEFAULT_SETTINGS.vecInjRole;
-    cfg.recallTopK  = parseInt(q('#ni-recall-topk')?.value) || DEFAULT_SETTINGS.recallTopK;
-    cfg.recallThresh= parseFloat(q('#ni-recall-thresh')?.value) ?? DEFAULT_SETTINGS.recallThresh;
+    // 深度 0 是合法值（输入框 min="0"），用 || 会把 0 当成「没填」再改回默认值。
+    cfg.injDepth    = niCfgInt('#ni-inj-depth', DEFAULT_SETTINGS.injDepth);
+    cfg.vecInjPos   = niCfgInt('#ni-vec-inj-pos', DEFAULT_SETTINGS.vecInjPos);
+    cfg.vecInjRole  = niCfgInt('#ni-vec-inj-role', DEFAULT_SETTINGS.vecInjRole);
+    cfg.recallTopK  = niCfgInt('#ni-recall-topk', DEFAULT_SETTINGS.recallTopK);
+    cfg.recallThresh= niCfgFloat('#ni-recall-thresh', DEFAULT_SETTINGS.recallThresh);
     cfg.vecInjMaxTokens = niNormalizeVectorInjectionMaxTokens(
         q('#ni-vec-inj-max-tokens')?.value,
         cfg.vecInjMaxTokens ?? DEFAULT_SETTINGS.vecInjMaxTokens,
@@ -791,18 +794,18 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
     );
     cfg.vecMsgTag   = (q('#ni-vec-msg-tag')?.value || '').trim();
     cfg.vecMsgCount = parseInt(q('#ni-vec-msg-count')?.value) || DEFAULT_SETTINGS.vecMsgCount;
-    cfg.charInjPos  = parseInt(q('#ni-char-inj-pos')?.value) ?? DEFAULT_SETTINGS.charInjPos;
-    cfg.charInjDepth= parseInt(q('#ni-char-inj-depth')?.value) ?? DEFAULT_SETTINGS.charInjDepth;
-    cfg.charInjRole = parseInt(q('#ni-char-inj-role')?.value) ?? DEFAULT_SETTINGS.charInjRole;
+    cfg.charInjPos  = niCfgInt('#ni-char-inj-pos', DEFAULT_SETTINGS.charInjPos);
+    cfg.charInjDepth= niCfgInt('#ni-char-inj-depth', DEFAULT_SETTINGS.charInjDepth);
+    cfg.charInjRole = niCfgInt('#ni-char-inj-role', DEFAULT_SETTINGS.charInjRole);
     cfg.charAutoSleepEnabled = q('#ni-char-auto-sleep-btn')
         ? q('#ni-char-auto-sleep-btn').classList.contains('on')
         : (cfg.charAutoSleepEnabled ?? DEFAULT_SETTINGS.charAutoSleepEnabled);
     cfg.charPageSize = Math.max(1, Math.min(200,
         parseInt(q('#ni-char-page-size')?.value ?? cfg.charPageSize, 10) || DEFAULT_SETTINGS.charPageSize
     ));
-    cfg.plotInjPos  = parseInt(q('#ni-plot-inj-pos')?.value) ?? DEFAULT_SETTINGS.plotInjPos;
-    cfg.plotInjDepth= parseInt(q('#ni-plot-inj-depth')?.value) ?? DEFAULT_SETTINGS.plotInjDepth;
-    cfg.plotInjRole = parseInt(q('#ni-plot-inj-role')?.value) ?? DEFAULT_SETTINGS.plotInjRole;
+    cfg.plotInjPos  = niCfgInt('#ni-plot-inj-pos', DEFAULT_SETTINGS.plotInjPos);
+    cfg.plotInjDepth= niCfgInt('#ni-plot-inj-depth', DEFAULT_SETTINGS.plotInjDepth);
+    cfg.plotInjRole = niCfgInt('#ni-plot-inj-role', DEFAULT_SETTINGS.plotInjRole);
     cfg.plotInjMaxTokens = niNormalizeRawInjectionMaxTokens(
         q('#ni-plot-inj-max-tokens')?.value ?? cfg.plotInjMaxTokens,
         DEFAULT_SETTINGS.plotInjMaxTokens,
@@ -856,9 +859,9 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
     cfg.globalTailInjDepth = niCfgInt('#ni-global-tail-inj-depth', DEFAULT_SETTINGS.globalTailInjDepth);
     cfg.globalTailInjRole = niCfgInt('#ni-global-tail-inj-role', DEFAULT_SETTINGS.globalTailInjRole);
     cfg.apiTimeoutMin = Math.max(1, parseInt(q('#ni-api-timeout')?.value) || DEFAULT_SETTINGS.apiTimeoutMin);
-    cfg.apiRateLimit  = Math.max(0, parseInt(q('#ni-rate-limit')?.value) ?? DEFAULT_SETTINGS.apiRateLimit);
+    cfg.apiRateLimit  = Math.max(0, niCfgInt('#ni-rate-limit', DEFAULT_SETTINGS.apiRateLimit));
     cfg.apiConcurrency = niCfgBoundInt('#ni-api-concurrency', DEFAULT_SETTINGS.apiConcurrency, 0, 99);
-    cfg.vecRateLimit  = Math.max(0, parseInt(q('#ni-vec-rate-limit')?.value) ?? DEFAULT_SETTINGS.vecRateLimit);
+    cfg.vecRateLimit  = Math.max(0, niCfgInt('#ni-vec-rate-limit', DEFAULT_SETTINGS.vecRateLimit));
     cfg.vecConcurrency = niCfgBoundInt('#ni-vec-concurrency', DEFAULT_SETTINGS.vecConcurrency, 0, 99);
     cfg.vecBatchSize = niCfgBoundInt('#ni-vec-batch-size', DEFAULT_SETTINGS.vecBatchSize, 1, 100);
     // 持久化运行时数据
@@ -881,14 +884,16 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
     cfg._cleanDone     = S.cleanDone;
     cfg._worldCategories = niGetWorldCategories();
     niClearLegacyDeviationSettings();
-    cfg.worldInjPos   = parseInt(q('#ni-world-inj-pos')?.value)   ?? DEFAULT_SETTINGS.worldInjPos;
-    cfg.worldInjDepth = parseInt(q('#ni-world-inj-depth')?.value)  ?? DEFAULT_SETTINGS.worldInjDepth;
-    cfg.worldInjRole  = parseInt(q('#ni-world-inj-role')?.value)   ?? DEFAULT_SETTINGS.worldInjRole;
+    // `?? 默认值` 挡不住 NaN（parseInt('') 得到 NaN，NaN ?? x 仍是 NaN），
+    // 输入框被清空时会把 NaN 存进设置、注入位置随之失效。统一走 niCfgInt。
+    cfg.worldInjPos   = niCfgInt('#ni-world-inj-pos', DEFAULT_SETTINGS.worldInjPos);
+    cfg.worldInjDepth = niCfgInt('#ni-world-inj-depth', DEFAULT_SETTINGS.worldInjDepth);
+    cfg.worldInjRole  = niCfgInt('#ni-world-inj-role', DEFAULT_SETTINGS.worldInjRole);
 
     // 文风设置
-    cfg.styleInjPos   = parseInt(q('#ni-style-inj-pos2')?.value)   ?? DEFAULT_SETTINGS.styleInjPos;
-    cfg.styleInjDepth = parseInt(q('#ni-style-inj-depth2')?.value)  ?? DEFAULT_SETTINGS.styleInjDepth;
-    cfg.styleInjRole  = parseInt(q('#ni-style-inj-role2')?.value)   ?? DEFAULT_SETTINGS.styleInjRole;
+    cfg.styleInjPos   = niCfgInt('#ni-style-inj-pos2', DEFAULT_SETTINGS.styleInjPos);
+    cfg.styleInjDepth = niCfgInt('#ni-style-inj-depth2', DEFAULT_SETTINGS.styleInjDepth);
+    cfg.styleInjRole  = niCfgInt('#ni-style-inj-role2', DEFAULT_SETTINGS.styleInjRole);
     cfg.styleSampleLen= parseInt(q('#ni-style-sample-len')?.value) || DEFAULT_SETTINGS.styleSampleLen;
     cfg.styleChunkIdx = parseInt(q('#ni-style-chunk-sel')?.value)  || 0;
     cfg.styleMode     = q('#ni-style-mode')?.value                 ?? DEFAULT_SETTINGS.styleMode;
@@ -1084,16 +1089,20 @@ function niBuildStageInjectionBudgetPreview(precomputedPlan = null) {
  *
  * 是的话，穿书模式的「持续提示词」就不能再注入一次当前节点——它里面的
  * {B_BODY} 正是同一段节点正文，用户会看到同一段剧情进两次。
- * 计划对象在 onPromptReady 里解析、在 CHAT_COMPLETION_PROMPT_READY 监听里复用，
- * 所以这里重新解析一次拿到同一份判定，不额外保存全局状态。
+ *
+ * 注意：`fullStageInjectionWholeStageSent` 不是 plan 的固有字段，它由
+ * `niBuildStageInjectionPayloadForPlan` 在真正构建正文时写回。而这里的 plan 是
+ * 现解析出来的新对象，不构建就永远是 undefined —— 以前正是这样导致本函数恒为
+ * false、重复注入一直没被拦住。所以这里必须真的构建一次正文再读回。
  */
 function niTbFullStageInjectionCoversCurrentNode() {
     if (!extension_settings[EXT_NAME]?.transBookMode) return false;
     const cfg = extension_settings[EXT_NAME] || {};
     if (!niIsFullStageInjectionEnabled(cfg)) return false;
     const plan = niResolveStageInjectionExecutionPlan(cfg);
-    return plan.fullStageInjectionApplied === true
-        && plan.fullStageInjectionWholeStageSent === true;
+    if (plan.fullStageInjectionApplied !== true) return false;
+    niBuildStageInjectionPayloadForPlan(plan, cfg);
+    return plan.fullStageInjectionWholeStageSent === true;
 }
 
 function niUpdateStageInjectionBudgetNote(result = null, {
@@ -1290,6 +1299,10 @@ const sv = (sel, val) => { const el = q(sel); if (el) el.value = val; };
 let _niTopbarIconToggleBound = false;
 const niCfgInt = (sel, fallback) => {
     const n = parseInt(q(sel)?.value, 10);
+    return Number.isFinite(n) ? n : fallback;
+};
+const niCfgFloat = (sel, fallback) => {
+    const n = parseFloat(q(sel)?.value);
     return Number.isFinite(n) ? n : fallback;
 };
 const niBoundIntValue = (value, fallback, min = 0, max = 9999) => {
@@ -4126,6 +4139,24 @@ function niBuildCharInjectionText() {
 }
 
 /**
+ * 向量召回失败时提示一次。以前失败只落 console，用户看到「这轮没召回」会以为
+ * 是没命中相关片段，实际是 API key 失效 / 超时 / 换模型后维度不匹配。
+ * 5 分钟内只提示一次，避免每回合刷屏。
+ */
+let niVecRecallWarnedAt = 0;
+function niToastVectorRecallFailOnce(message) {
+    const now = Date.now();
+    if (now - niVecRecallWarnedAt < 5 * 60 * 1000) return;
+    niVecRecallWarnedAt = now;
+    const text = String(message || '').trim() || '原因未知';
+    try {
+        toastr.warning(`【小说注入】向量召回失败，本轮没有召回任何原著片段。\n原因：${text}`, '向量召回失败', { timeOut: 12000 });
+    } catch {
+        console.warn('[NI] 向量召回失败:', text);
+    }
+}
+
+/**
  * 组装向量召回用的加权查询。注入主链与「注入预览」共用这一份，
  * 保证预览里「跑一次真实召回」看到的就是真正会发出去的那批片段。
  */
@@ -4243,10 +4274,17 @@ async function onPromptReady(eventData) {
                     excludeChunkIdxs: blockedRecallChunkIdxs,
                 });
                 if (recallText.trim()) {
+                    niClearVectorRecallError();
                     const vecContent = `[小说原著相关片段·向量召回]\n${recallText}\n[/小说原著相关片段·向量召回]`;
                     doInject(`${EXT_NAME}_vec`, vecContent, vecPos, vecDepth, vecRole);
+                } else {
+                    const vecErr = niGetVectorRecallError();
+                    if (vecErr) niToastVectorRecallFailOnce(vecErr);
                 }
-            } catch (e) { console.warn('[NI] 向量召回失败:', e); }
+            } catch (e) {
+                console.warn('[NI] 向量召回失败:', e);
+                niToastVectorRecallFailOnce(e?.message || String(e));
+            }
         }
     }
 
@@ -6042,7 +6080,8 @@ jQuery(document).ready(function () {
                 .replace(/{B_BODY}/g,  curNode.body || '（暂无描述）') + immersionAppend;
             _inject(`${EXT_NAME}_tb_ongoing`, ongoingContent);
         });
-        eventSource.makeLast?.(event_types.CHAT_COMPLETION_PROMPT_READY, niFinalUserSubPromptRewrite);
+        // 注意：CHAT_COMPLETION_PROMPT_READY 的 makeLast 已在初始化里无条件注册过一次
+        // （见「监听酒馆事件」那段），这里再 makeLast 会让改写函数对同一轮执行两遍。
     }
 });
 
@@ -6051,10 +6090,15 @@ jQuery(document).ready(function () {
 jQuery(document).ready(function () {
     if (typeof eventSource === 'undefined' || typeof event_types === 'undefined') return;
 
-    // 消息渲染完成后挂载状态栏
+    // 消息渲染完成后挂载状态栏。
+    // 注意：同一条角色消息会先后触发 MESSAGE_RENDERED 与 CHARACTER_MESSAGE_RENDERED，
+    // 以前两个事件各排一个 100ms 定时器，状态栏被重建两遍（视图还被重置两次）。
+    // 这里合并成一次，只保留最后一个定时器。
+    let niStoryBarRenderTimer = 0;
     const onRendered = (messageId) => {
         if (!extension_settings[EXT_NAME]?.transBookMode) return;
-        setTimeout(() => niTbRenderStoryBar({ resetView: true }), 100);
+        clearTimeout(niStoryBarRenderTimer);
+        niStoryBarRenderTimer = setTimeout(() => niTbRenderStoryBar({ resetView: true }), 100);
     };
 
     eventSource.on(event_types.MESSAGE_RENDERED,            onRendered);
@@ -6545,6 +6589,9 @@ console.log('[NI-TB] 穿书模式模块已加载');
     // ── 显示/隐藏浮动按钮──
     function niPopSetVisible(show) {
         const fab = q('ni-fab'), ring = q('ni-fab-ring');
+        // 隐藏 FAB 时必须把已经打开的弹窗一起关掉：否则全屏遮罩（pointer-events:auto）
+        // 会留在页面上，FAB 又已经不可见，用户只能点遮罩才关得掉，期间点哪儿都被吞一次。
+        if (!show && _popOpen) niPopClose();
         if (fab)  fab.style.display  = show ? 'flex' : 'none';
         if (ring) ring.style.display = show ? 'block' : 'none';
     }
@@ -6555,6 +6602,9 @@ console.log('[NI-TB] 穿书模式模块已加载');
         const fab  = q('ni-fab');
         const ring = q('ni-fab-ring');
         if (!fab) return;
+        // 同一批节点只绑一次；模板重新插入后是新节点，dataset 为空会重新绑定。
+        if (fab.dataset.niFabBound === '1') return;
+        fab.dataset.niFabBound = '1';
 
         const _win = (typeof _niPopWin !== 'undefined') ? _niPopWin : window;
 
@@ -6619,7 +6669,13 @@ console.log('[NI-TB] 穿书模式模块已加载');
 
     // ── 按钮事件 ──
     function niPopBindEvents() {
-        q('ni-popup-overlay')?.addEventListener('click', niPopClose);
+        const overlay = q('ni-popup-overlay');
+        if (overlay) {
+            // 同批节点只绑一次，避免重复 Bootstrap 后「点一下开又立刻关」。
+            if (overlay.dataset.niPopBound === '1') return;
+            overlay.dataset.niPopBound = '1';
+            overlay.addEventListener('click', niPopClose);
+        }
 
         q('ni-pop-stage-row')?.addEventListener('click', () => {
             // 弹窗可能持续打开；展开阶段选择前重新读取主模块的最新状态。
@@ -6885,6 +6941,11 @@ console.log('[NI-TB] 穿书模式模块已加载');
 
     // ── 初始化入口──
     function niPopBootstrap() {
+        // 幂等：模板被重新插入（切页/重载）时 Bootstrap 会被再调一次，
+        // 而 niPopInitFab / niPopBindEvents 都是 addEventListener，重复调用会让
+        // 同一个点击触发两遍（表现是「点一下开、又立刻被关掉」）。
+        // 不能整段 early-return：重新插入后是新 DOM 节点，还得重新搬移与绑定，
+        // 所以幂等放在各自的绑定函数里（用 dataset 标记）。
         niPopInjectCSS();
         // ── 将 FAB、FAB-ring 和弹窗容器移动到主页面 body──
         const fabRing = document.getElementById('ni-fab-ring');
