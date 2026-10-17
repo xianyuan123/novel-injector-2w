@@ -1435,6 +1435,7 @@
           <span class="ni-stage-inj-bar-title"><i class="ti ti-sliders"></i>注入策略</span>
           <span class="ni-stage-inj-summary" id="ni-stage-inj-summary">—</span>
           <button class="ni-stage-inj-preview" id="ni-inj-preview-open" type="button" title="看看这一轮到底会发出去什么"><i class="ti ti-eye"></i>预览</button>
+          <button class="ni-stage-inj-preview" id="ni-offscreen-open" type="button" title="后台动向：主视角之外的人/势力在做什么"><i class="ti ti-world"></i>后台</button>
           <i class="ti ti-chevron-down ni-stage-inj-chevron"></i>
         </div>
         <div class="ni-stage-inj-body" id="ni-stage-inj-body">
@@ -1526,6 +1527,71 @@
       </div>
       <div class="ni-modal-btns">
         <button class="ni-modal-confirm" id="ni-inj-preview-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 后台动向：主视角之外的推演结果，可选注入 -->
+  <div class="ni-modal-bg" id="ni-offscreen-modal" style="display:none">
+    <div class="ni-modal ni-offscreen-card" role="dialog" aria-modal="true" aria-labelledby="ni-off-title">
+      <div class="ni-modal-title" id="ni-off-title">后台动向（其他视角）</div>
+      <div class="ni-off-sub">节点推进时，让模型推演主视角看不到的人在做什么，结果压成几行注入，只作背景参考。</div>
+      <div class="ni-off-row">
+        <label class="ni-off-switch"><input type="checkbox" id="ni-off-enabled"> 启用后台推演</label>
+      </div>
+      <div class="ni-off-row">
+        <label class="ni-off-field">推演节奏
+          <select id="ni-off-mode">
+            <option value="node">节点有动向才推演</option>
+            <option value="always">每回合都推演</option>
+            <option value="off">只手动推演</option>
+          </select>
+        </label>
+        <label class="ni-off-field">用哪个模型
+          <select id="ni-off-model">
+            <option value="current">当前对话模型</option>
+            <option value="plugin">插件里配置的 API</option>
+          </select>
+        </label>
+      </div>
+      <div class="ni-off-row">
+        <label class="ni-off-field">主视角
+          <input type="text" id="ni-off-pov" placeholder="留空 = 当前角色卡" spellcheck="false">
+        </label>
+        <label class="ni-off-field">覆盖后续阶段
+          <input type="number" id="ni-off-stages" min="0" max="10" step="1" value="0">
+        </label>
+        <label class="ni-off-field">注入上限
+          <input type="number" id="ni-off-maxchars" min="100" max="4000" step="50" value="800"> 字
+        </label>
+      </div>
+      <details class="ni-off-details">
+        <summary>外接接口（可选，填了就走这个，不再用内置模型）</summary>
+        <div class="ni-off-row">
+          <label class="ni-off-field ni-off-wide">接口地址
+            <input type="text" id="ni-off-api-url" placeholder="https://api.example.com/v1/chat/completions" spellcheck="false">
+          </label>
+        </div>
+        <div class="ni-off-row">
+          <label class="ni-off-field">模型名
+            <input type="text" id="ni-off-api-model" placeholder="gpt-4o-mini" spellcheck="false">
+          </label>
+          <label class="ni-off-field">API Key
+            <input type="password" id="ni-off-api-key" placeholder="sk-..." spellcheck="false">
+          </label>
+          <label class="ni-off-field">超时
+            <input type="number" id="ni-off-api-timeout" min="5" max="300" step="5" value="60"> 秒
+          </label>
+        </div>
+      </details>
+      <div class="ni-off-status" id="ni-off-status"></div>
+      <div class="ni-off-list" id="ni-off-list"></div>
+      <div class="ni-off-actions">
+        <button class="ni-bulk-btn on" id="ni-off-run" type="button"><i class="ti ti-bolt"></i>推演一轮</button>
+        <button class="ni-bulk-btn off" id="ni-off-clear" type="button"><i class="ti ti-trash"></i>清空</button>
+      </div>
+      <div class="ni-modal-btns">
+        <button class="ni-modal-confirm" id="ni-off-close">关闭</button>
       </div>
     </div>
   </div>

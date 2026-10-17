@@ -231,6 +231,17 @@ import {
 } from './lib/advance-judge.js';
 
 import {
+    NI_DEFAULT_OFFSCREEN_PROMPT,
+    niNormalizeOffscreenMode,
+    niBuildOffscreenMessages,
+    niParseOffscreenReply,
+    niMergeOffscreenThreads,
+    niFormatOffscreenInjection,
+    niShouldRunOffscreen,
+    niCallExternalChat,
+} from './lib/offscreen-system.js';
+
+import {
     NI_THEME_DEFAULT,
     createThemeEditor,
     niApplyStatusbarTheme,
@@ -3573,6 +3584,11 @@ function niBuildInjectionPreviewSections(precomputedPlan = null) {
             niInjMetaLabel(cfg.plotInjPos, cfg.plotInjDepth, cfg.plotInjRole,
                 `第 ${futurePlot.stageIndices.join('、')} 阶段`));
     }
+    const offscreenText = niBuildOffscreenInjectionText(cfg);
+    if (offscreenText) {
+        push('offscreen', '后台动向（其他视角）', offscreenText,
+            niInjMetaLabel(cfg.plotInjPos, cfg.plotInjDepth, cfg.plotInjRole, '主视角之外，仅作背景参考'));
+    }
     if (globalBuiltin) {
         push('global_tail', '全局尾部提示词', cfg.globalTailPrompt,
             niInjMetaLabel(cfg.globalTailInjPos, cfg.globalTailInjDepth, cfg.globalTailInjRole, '拼在消息里'));
@@ -3693,6 +3709,238 @@ async function niRunInjectionPreviewRecall() {
         console.warn('[NI] 预览召回失败:', e);
         niRenderInjectionPreview({ recallError: e?.message || '未知错误' });
     }
+}
+
+/**
+ * 后台动向（其他视角）
+ * ------------------
+ * 主视角看不到的人/势力也在动。节点推进（有「动向」）时推演一轮，把结果压成几行注入，
+ * 让 AI 的世界不是静止的。三种节奏：节点一动才推 / 每回合都推 / 只手动推。
+ * 请求走「当前对话模型」「插件里配置的 API」或用户自己填的外接 OpenAI 兼容接口。
+ */
+function niOffscreenSettings() {
+    if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
+    return extension_settings[EXT_NAME];
+}
+
+function niGetOffscreenPov(cfg = niOffscreenSettings()) {
+    const manual = String(cfg.tbOffscreenPov || '').trim();
+    if (manual) return manual;
+    try {
+        const ctx = getContext?.();
+        return String(ctx?.name2 || ctx?.name || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+// 只取最近若干字对话：推演不需要全文，越靠后越重要。
+function niCollectOffscreenChat(maxChars = 2500) {
+    const chatArr = getContext?.()?.chat || (typeof chat !== 'undefined' && Array.isArray(chat) ? chat : []);
+    const lines = [];
+    let used = 0;
+    for (let i = chatArr.length - 1; i >= 0 && used < maxChars; i--) {
+        const m = chatArr[i];
+        if (!m || m.is_system) continue;
+        const text = String(m.mes || '').trim();
+        if (!text) continue;
+        const who = m.is_user ? (m.name || '用户') : (m.name || '角色');
+        let line = `${who}：${text}`;
+        if (line.length > 800) line = `${line.slice(0, 800)}…`;
+        lines.unshift(line);
+        used += line.length;
+    }
+    return lines.join('\n');
+}
+
+/** 本轮要注入的「后台动向」文本；关着或没有记录时返回空串。 */
+function niBuildOffscreenInjectionText(cfg = niOffscreenSettings()) {
+    if (!cfg.tbOffscreenEnabled) return '';
+    const state = window.niTbGetOffscreenState?.();
+    const threads = Array.isArray(state?.threads) ? state.threads : [];
+    if (!threads.length) return '';
+    return niFormatOffscreenInjection(threads, {
+        maxChars: Number(cfg.tbOffscreenMaxChars) || 800,
+    });
+}
+
+let _niOffscreenBusy = false;
+
+/**
+ * 跑一轮后台推演。
+ * 安全失败：请求失败、解析失败都只写 console（手动触发时才提示用户），不影响任何注入主链。
+ */
+async function niRunOffscreenSimulation({ reason = 'manual', silent = false } = {}) {
+    const cfg = niOffscreenSettings();
+    if (!cfg.tbOffscreenEnabled) return { skipped: 'disabled' };
+    if (_niOffscreenBusy) return { skipped: 'busy' };
+    const ctx = window.niTbGetOffscreenContext?.();
+    if (!ctx?.curNode) return { skipped: 'no-node' };
+    const state = window.niTbGetOffscreenState?.() || { threads: [], lastRunNodeId: '', lastRunAt: 0 };
+    const gate = niShouldRunOffscreen({
+        enabled: true,
+        mode: cfg.tbOffscreenMode,
+        curNodeId: ctx.curNodeId,
+        lastRunNodeId: state.lastRunNodeId,
+    });
+    // 手动点「推演一轮」时不看节奏，强制跑一次
+    if (!gate.run && reason !== 'manual') return { skipped: gate.reason };
+
+    _niOffscreenBusy = true;
+    try {
+        const messages = niBuildOffscreenMessages({
+            pov: niGetOffscreenPov(cfg),
+            stageTitle: ctx.stageTitle,
+            nodeTitle: ctx.curNode.title || '',
+            nodeText: ctx.curNode.body || ctx.curNode.text || '',
+            recentChat: niCollectOffscreenChat(),
+            existingThreads: state.threads || [],
+        });
+        const apiUrl = String(cfg.tbOffscreenApiUrl || '').trim();
+        let raw = '';
+        if (apiUrl) {
+            const out = await niCallExternalChat({
+                url: apiUrl,
+                apiKey: String(cfg.tbOffscreenApiKey || '').trim(),
+                model: String(cfg.tbOffscreenApiModel || '').trim(),
+                messages,
+                timeoutMs: (Number(cfg.tbOffscreenApiTimeout) || 60) * 1000,
+                maxTokens: 600,
+            });
+            raw = out.text;
+        } else if ((cfg.tbOffscreenModel || 'current') === 'plugin') {
+            raw = await callCleanApi(messages, {});
+        } else {
+            raw = await niGenerateWithTavernMainPreset(messages, { responseLength: 400 });
+        }
+
+        const parsed = niParseOffscreenReply(raw);
+        const now = Date.now();
+        if (!parsed.ok) {
+            // 解析失败也记账节点：同一节点不要反复请求，等下次真的推进再说。
+            window.niTbSetOffscreenState?.({ lastRunNodeId: ctx.curNodeId, lastRunAt: now });
+            if (!silent) toastr.warning(`后台推演没看懂模型回复：${parsed.reason}`);
+            return { ok: false, reason: parsed.reason };
+        }
+        if (!parsed.threads.length) {
+            window.niTbSetOffscreenState?.({ lastRunNodeId: ctx.curNodeId, lastRunAt: now });
+            if (!silent) toastr.info('这轮没有值得记录的动向');
+            return { ok: true, added: 0 };
+        }
+        const threads = niMergeOffscreenThreads(state.threads || [], parsed.threads, {
+            stageIdx: ctx.curStageIdx,
+            nodeId: ctx.curNodeId,
+            now,
+        });
+        window.niTbSetOffscreenState?.({ threads, lastRunNodeId: ctx.curNodeId, lastRunAt: now });
+        niRenderOffscreenThreads();
+        niUpdateOffscreenStatus();
+        if (!silent) toastr.success(`后台动向新增 ${parsed.threads.length} 条`);
+        return { ok: true, added: parsed.threads.length, total: threads.length };
+    } catch (e) {
+        console.warn('[NI] 后台推演失败:', e);
+        if (!silent) toastr.warning(`后台推演失败：${e?.message || e}`);
+        return { error: e };
+    } finally {
+        _niOffscreenBusy = false;
+    }
+}
+
+// 节奏为「每回合都推演」时，每条 AI 回复后都补一次（节点没动也推）。
+function niMaybeRunOffscreenAlways() {
+    const cfg = niOffscreenSettings();
+    if (!cfg.tbOffscreenEnabled) return;
+    if (niNormalizeOffscreenMode(cfg.tbOffscreenMode) !== 'always') return;
+    niRunOffscreenSimulation({ reason: 'reply', silent: true }).catch(() => {});
+}
+
+function niOpenOffscreenModal() {
+    const modal = q('#ni-offscreen-modal');
+    if (!modal) return;
+    niRefreshOffscreenUI();
+    modal.style.display = 'flex';
+}
+
+function niCloseOffscreenModal() {
+    const modal = q('#ni-offscreen-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function niUpdateOffscreenStatus() {
+    const el = q('#ni-offscreen-status');
+    if (!el) return;
+    const cfg = niOffscreenSettings();
+    const state = window.niTbGetOffscreenState?.() || { threads: [], lastRunAt: 0 };
+    const modeText = niNormalizeOffscreenMode(cfg.tbOffscreenMode) === 'always'
+        ? '每回合都推演'
+        : niNormalizeOffscreenMode(cfg.tbOffscreenMode) === 'off'
+            ? '只手动推演'
+            : '节点有动向才推演';
+    const apiText = String(cfg.tbOffscreenApiUrl || '').trim() ? '外接接口' : '内置模型';
+    const last = Number(state.lastRunAt) ? new Date(Number(state.lastRunAt)).toLocaleTimeString() : '还没跑过';
+    const count = Array.isArray(state.threads) ? state.threads.length : 0;
+    el.textContent = cfg.tbOffscreenEnabled
+        ? `${modeText} · ${apiText} · 已记录 ${count} 条 · 上次 ${last}`
+        : `未启用，不会发任何请求 · 已记录 ${count} 条`;
+}
+
+function niRenderOffscreenThreads() {
+    const list = q('#ni-off-list');
+    if (!list) return;
+    const state = window.niTbGetOffscreenState?.() || { threads: [] };
+    const threads = Array.isArray(state.threads) ? state.threads : [];
+    if (!threads.length) {
+        list.innerHTML = '<div class="ni-off-empty">还没有记录。点「推演一轮」看看别人在做什么。</div>';
+        return;
+    }
+    list.innerHTML = threads.map((t, i) => `
+      <div class="ni-off-item" data-off-idx="${i}">
+        <div class="ni-off-item-head">
+          <span class="ni-off-item-subject">${niEscHtml(String(t.subject || ''))}</span>
+          <span class="ni-off-item-stage">${Number(t.stageIdx) > 0 ? `第 ${Number(t.stageIdx)} 阶段` : ''}</span>
+          <button class="ni-off-mini ni-off-del" data-off-del="${i}" type="button" title="删掉这条动向">删除</button>
+        </div>
+        <div class="ni-off-item-summary">${niEscHtml(String(t.summary || ''))}</div>
+      </div>`).join('');
+}
+
+function niRefreshOffscreenUI() {
+    const cfg = niOffscreenSettings();
+    const setVal = (sel, value) => { const el = q(sel); if (el) el.value = value; };
+    const setChk = (sel, on) => { const el = q(sel); if (el) el.checked = !!on; };
+    setChk('#ni-off-enabled', cfg.tbOffscreenEnabled);
+    setVal('#ni-off-mode', niNormalizeOffscreenMode(cfg.tbOffscreenMode));
+    setVal('#ni-off-model', cfg.tbOffscreenModel === 'plugin' ? 'plugin' : 'current');
+    setVal('#ni-off-pov', cfg.tbOffscreenPov || '');
+    setVal('#ni-off-stages', String(Math.max(0, Math.min(10, parseInt(cfg.tbOffscreenStages, 10) || 0))));
+    setVal('#ni-off-maxchars', String(Math.max(100, Math.min(4000, parseInt(cfg.tbOffscreenMaxChars, 10) || 800))));
+    setVal('#ni-off-api-url', cfg.tbOffscreenApiUrl || '');
+    setVal('#ni-off-api-model', cfg.tbOffscreenApiModel || '');
+    setVal('#ni-off-api-key', cfg.tbOffscreenApiKey || '');
+    setVal('#ni-off-api-timeout', String(Math.max(5, Math.min(300, parseInt(cfg.tbOffscreenApiTimeout, 10) || 60))));
+    niRenderOffscreenThreads();
+    niUpdateOffscreenStatus();
+}
+
+function niSaveOffscreenSettingsFromUi() {
+    const cfg = niOffscreenSettings();
+    const val = sel => String(q(sel)?.value ?? '');
+    const num = (sel, min, max, dflt) => {
+        const n = parseInt(val(sel), 10);
+        return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : dflt;
+    };
+    cfg.tbOffscreenEnabled = !!q('#ni-off-enabled')?.checked;
+    cfg.tbOffscreenMode = niNormalizeOffscreenMode(val('#ni-off-mode'));
+    cfg.tbOffscreenModel = val('#ni-off-model') === 'plugin' ? 'plugin' : 'current';
+    cfg.tbOffscreenPov = val('#ni-off-pov').trim();
+    cfg.tbOffscreenStages = num('#ni-off-stages', 0, 10, 0);
+    cfg.tbOffscreenMaxChars = num('#ni-off-maxchars', 100, 4000, 800);
+    cfg.tbOffscreenApiUrl = val('#ni-off-api-url').trim();
+    cfg.tbOffscreenApiModel = val('#ni-off-api-model').trim();
+    cfg.tbOffscreenApiKey = val('#ni-off-api-key').trim();
+    cfg.tbOffscreenApiTimeout = num('#ni-off-api-timeout', 5, 300, 60);
+    niSaveSettings();
+    niUpdateOffscreenStatus();
 }
 
 /**
@@ -4343,6 +4591,16 @@ async function onPromptReady(eventData) {
         }
     }
 
+    // ②.6 后台动向（可选）：主视角之外的势力在做什么。只作背景参考，正文不必直接写出来。
+    try {
+        const offscreenText = niBuildOffscreenInjectionText(cfg);
+        if (offscreenText) {
+            doInject(`${EXT_NAME}_offscreen`, offscreenText, plotPos, plotDepth, plotRole);
+        }
+    } catch (e) {
+        console.warn('[NI] 后台动向注入失败:', e);
+    }
+
     // ③ 角色人设注入（取文与「注入预览」共用 niBuildCharInjectionText，两边不会跑偏）
     const charContent = niBuildCharInjectionText();
     if (charContent) {
@@ -4754,6 +5012,48 @@ jQuery(async () => {
     $app.on('click', '#ni-inj-preview-modal', (ev) => {
         // 点背景（而不是弹窗本体）时关闭
         if (ev?.target?.id === 'ni-inj-preview-modal') niCloseInjectionPreview();
+    });
+    // 后台动向（其他视角）：弹窗入口、手动推演、清空、删单条、设置回写
+    $app.on('click', '#ni-offscreen-open', (ev) => {
+        ev?.stopPropagation?.();
+        niOpenOffscreenModal();
+    });
+    $app.on('click', '#ni-off-close', () => niCloseOffscreenModal());
+    $app.on('click', '#ni-offscreen-modal', (ev) => {
+        if (ev?.target?.id === 'ni-offscreen-modal') niCloseOffscreenModal();
+    });
+    $app.on('click', '#ni-off-run', async (ev) => {
+        ev?.stopPropagation?.();
+        const btn = ev?.currentTarget;
+        if (btn) { btn.disabled = true; btn.textContent = '推演中…'; }
+        try {
+            await niRunOffscreenSimulation({ reason: 'manual', silent: false });
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '推演一轮'; }
+        }
+    });
+    $app.on('click', '#ni-off-clear', () => {
+        if (!confirm('清空所有后台动向记录？')) return;
+        window.niTbSetOffscreenState?.({ threads: [], lastRunNodeId: '', lastRunAt: 0 });
+        niRenderOffscreenThreads();
+        niUpdateOffscreenStatus();
+    });
+    $app.on('click', '[data-off-del]', (ev) => {
+        ev?.stopPropagation?.();
+        const idx = parseInt(ev?.target?.dataset?.offDel, 10);
+        if (!Number.isFinite(idx)) return;
+        const state = window.niTbGetOffscreenState?.() || { threads: [] };
+        const threads = (state.threads || []).filter((_, i) => i !== idx);
+        window.niTbSetOffscreenState?.({ threads });
+        niRenderOffscreenThreads();
+        niUpdateOffscreenStatus();
+    });
+    $app.on('change', '#ni-off-enabled, #ni-off-mode, #ni-off-model, #ni-off-pov, #ni-off-stages, #ni-off-maxchars, #ni-off-api-url, #ni-off-api-model, #ni-off-api-key, #ni-off-api-timeout', () => {
+        niSaveOffscreenSettingsFromUi();
+    });
+    // 输入框用 input 事件实时回写（只在设置弹窗里，不碰小说数据）
+    $app.on('input', '#ni-off-pov, #ni-off-api-url, #ni-off-api-model, #ni-off-api-key', () => {
+        niSaveOffscreenSettingsFromUi();
     });
     // 未来剧情预告：把「当前阶段之后」若干阶段的剧情提前注入。
     $app.on('click', '#ni-stage-future-inject', () => {
@@ -6177,6 +6477,10 @@ jQuery(document).ready(function () {
             if (!advance) return { advance: false, verdict };
 
             const result = await window.niTbAdvanceOneNode?.(ctx.curNode);
+            // 节点真的动了：按「节点有动向才推演」的节奏补一次后台推演（不阻塞推进，也不弹错）。
+            if (result?.advanced) {
+                niRunOffscreenSimulation({ reason: 'node', silent: true }).catch(() => {});
+            }
             return { advance: true, verdict, result };
         } finally {
             _niAutoAdvanceBusy = false;
@@ -6203,7 +6507,10 @@ jQuery(document).ready(function () {
         setTimeout(() => {
             // MESSAGE_RECEIVED 一般只对 AI 消息触发，但代理/扩展可能复用到用户消息上，再挡一层。
             if (Array.isArray(chat) && chat[chat.length - 1]?.is_user) return;
-            niTbMaybeAutoAdvance().catch(e => console.warn('[NI] 自动推进异常:', e));
+            niTbMaybeAutoAdvance()
+                .catch(e => console.warn('[NI] 自动推进异常:', e))
+                // 「每回合都推演」模式：推进判定结束后再补一次后台推演，避免两边同时发请求。
+                .finally(() => niMaybeRunOffscreenAlways());
         }, 300);
     });
     eventSource.on(event_types.MESSAGE_SENT,     () => niTbUnpinView());
