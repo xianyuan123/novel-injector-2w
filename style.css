@@ -2695,6 +2695,45 @@ select.ni-modal-input {
   color: var(--ni-warning-text, #C05A62);
   border-left-color: var(--ni-warning-text, #C05A62);
 }
+/* 未来剧情预告：开关 + 往后几个阶段 / 每阶段几个节点 */
+.ni-stage-future-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin: 2px 0 4px;
+}
+.ni-future-field {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: var(--color-text-secondary); white-space: nowrap;
+}
+.ni-future-field input {
+  width: 46px; padding: 2px 4px; font-size: 11px; text-align: center;
+  border-radius: 4px; border: 1px solid var(--color-border-secondary);
+  background: var(--color-background-secondary); color: var(--color-text-primary);
+}
+/* 「当前阶段也算」是个勾选框，别套用上面那个 46px 的宽度 */
+.ni-future-field.ni-future-check { cursor: pointer; user-select: none; }
+.ni-future-field.ni-future-check input {
+  width: auto; margin: 0 2px 0 0; padding: 0; accent-color: var(--ni-primary, #A0445E);
+}
+.ni-stage-future-note {
+  margin: -2px 0 10px;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 6px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  border-left: 3px solid var(--color-border-secondary);
+}
+.ni-stage-future-note.ni-active {
+  background: var(--ni-success-soft, #E1F5EE);
+  color: var(--ni-success-text, #0F6E56);
+  border-left-color: var(--ni-success-text, #0F6E56);
+}
+.ni-stage-future-note.ni-idle {
+  background: var(--ni-warning-soft, #FDE8EA);
+  color: var(--ni-warning-text, #C05A62);
+  border-left-color: var(--ni-warning-text, #C05A62);
+}
 .ni-bulk-btn {
   display: flex; align-items: center; gap: 2px;
   padding: 2px 5px; font-size: 11px; font-weight: 500;

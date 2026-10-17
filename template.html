@@ -1395,7 +1395,7 @@
             <textarea id="ni-stage-pt-content" class="ni-pt-textarea" spellcheck="false"></textarea>
           </div>
         </div>
-        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按右侧「未向量注入」模式注入；关闭 → 完全跳过。开启「当前阶段全量直注」后，当前阶段整段直注，更早阶段仍按向量召回。列表上方的「召回屏蔽·全局」可一键屏蔽当前阶段之前的全部阶段，或勾选任意几个阶段整段屏蔽。</div>
+        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按右侧「未向量注入」模式注入；关闭 → 完全跳过。开启「当前阶段全量直注」后，当前阶段整段直注，更早阶段仍按向量召回。「未来剧情预告」把当前阶段还没演到的节点和后面几个阶段的剧情提前给 AI 看，帮它把握走向。列表上方的「召回屏蔽·全局」可一键屏蔽当前阶段之前的全部阶段，或勾选任意几个阶段整段屏蔽。</div>
         <div class="ni-stage-bulk-row">
           <div class="ni-stage-inj-mode-wrap">
             <label class="ni-stage-inj-mode-lbl">未向量注入</label>
@@ -1409,6 +1409,22 @@
           <button class="ni-bulk-btn off" id="ni-stage-disable-all" title="关闭所有阶段"><i class="ti ti-x"></i>全部关闭</button>
         </div>
         <div class="ni-stage-full-inject-note" id="ni-stage-full-inject-note"></div>
+        <div class="ni-stage-future-row">
+          <button class="ni-bulk-btn off" id="ni-stage-future-inject" role="switch" aria-checked="false" title="未来剧情预告：把「当前阶段剩下的节点」和「之后若干阶段」的剧情提前注入，让 AI 知道后面会发生什么，提前埋伏笔、把关键事件自然带出来。"><i class="ti ti-fast-forward"></i>未来剧情预告</button>
+          <label class="ni-future-field">往后
+            <input type="number" id="ni-future-stages" value="1" min="0" max="20" step="1" aria-label="往后注入几个阶段">
+            个阶段
+          </label>
+          <label class="ni-future-field">每阶段
+            <input type="number" id="ni-future-nodes" value="2" min="0" max="20" step="1" aria-label="每个阶段取几个节点">
+            个节点
+          </label>
+          <label class="ni-future-field ni-future-check" title="没开「当前阶段全量直注」时，当前阶段只发已经演到的节点，剩下的节点 AI 看不到，容易写偏。勾上它就把当前阶段接下来的节点也放进预告。">
+            <input type="checkbox" id="ni-future-include-cur" checked aria-label="当前阶段剩下的节点也算进预告">
+            当前阶段也算
+          </label>
+        </div>
+        <div class="ni-stage-future-note" id="ni-stage-future-note"></div>
         <div class="ni-stage-block-bar">
           <span class="ni-block-hint"><i class="ti ti-eye-off"></i>召回屏蔽·全局</span>
           <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-prev" data-stage-block-action="block-prev" title="把当前阶段之前的阶段整段屏蔽，不再进向量召回与阶段直注"><i class="ti ti-eye-off"></i>一键屏蔽之前阶段</button>

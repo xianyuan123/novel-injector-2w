@@ -43,10 +43,19 @@ import { createAutosaveController } from './lib/autosave-system.js';
 
 import {
     NI_FULL_STAGE_INJECTION_MAX_TOKENS,
+    NI_FUTURE_PLOT_NODES_DEFAULT,
+    NI_FUTURE_PLOT_NODES_LIMIT,
+    NI_FUTURE_PLOT_STAGE_DEFAULT,
+    NI_FUTURE_PLOT_STAGE_LIMIT,
     NI_RAW_INJECTION_MAX_TOKENS_DEFAULT,
     NI_VEC_CHUNK_CHARS_DEFAULT,
     NI_VEC_INJECTION_MAX_TOKENS_DEFAULT,
+    niBuildFuturePlotPreview,
     niBuildStageInjectionPayload,
+    niIsFuturePlotInjectionEnabled,
+    niNormalizeFuturePlotNodesPerStage,
+    niNormalizeFuturePlotStageCount,
+    niResolveFuturePlotStageIndices,
     niIsFullStageInjectionEnabled,
     niIsVectorInjectionDisabledByUser,
     niNormalizeRawInjectionMaxTokens,
@@ -350,6 +359,12 @@ const DEFAULT_SETTINGS = {
     vecInjDisabled: false, // 有向量数据但用户选择不调用向量注入
     vecInjDisabledByUser: false, // 仅用户主动点击关闭时为 true；旧设置残留不能屏蔽向量
     curStageFullInject: false, // 当前阶段整段直注（不召回、不按单轮上限裁剪），更早阶段仍走向量召回
+    // 未来剧情预告：把「当前阶段剩下的剧情」与「之后若干阶段」提前注入，
+    // 帮 AI 把握走向、提前埋伏笔。没开全量直注时这正是最容易写偏的地方。
+    futurePlotPreview: false,                      // 是否开启
+    futurePlotStages: NI_FUTURE_PLOT_STAGE_DEFAULT, // 往后看几个阶段（0 = 不预告后面的阶段）
+    futurePlotNodes: NI_FUTURE_PLOT_NODES_DEFAULT,  // 每个阶段取前几个节点（0 = 该阶段全部节点）
+    futurePlotIncludeCurrent: true,                // 当前阶段剩下的节点也算进预告
     // 召回屏蔽：被屏蔽的节点/阶段不再进向量召回与阶段直注。
     // 节点用 _nodeId 记录（稳定，跨重新解析不漂移）；阶段用阶段号。
     blockedRecallNodes: {},   // { [nodeId]: true }
@@ -785,6 +800,17 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
     cfg.stagePageSize = Math.max(1, Math.min(200,
         parseInt(q('#ni-stage-page-size')?.value ?? cfg.stagePageSize, 10) || DEFAULT_SETTINGS.stagePageSize
     ));
+    // 未来剧情预告：两个数字输入都夹在合法区间里，避免手输的时候把注入撑爆。
+    cfg.futurePlotStages = niNormalizeFuturePlotStageCount(
+        q('#ni-future-stages')?.value,
+        cfg.futurePlotStages ?? DEFAULT_SETTINGS.futurePlotStages,
+    );
+    cfg.futurePlotNodes = niNormalizeFuturePlotNodesPerStage(
+        q('#ni-future-nodes')?.value,
+        cfg.futurePlotNodes ?? DEFAULT_SETTINGS.futurePlotNodes,
+    );
+    const includeCurEl = q('#ni-future-include-cur');
+    if (includeCurEl) cfg.futurePlotIncludeCurrent = includeCurEl.checked !== false;
     cfg.novelLibraryPageSize = Math.max(1, Math.min(200,
         parseInt(q('#ni-lib-page-size')?.value ?? cfg.novelLibraryPageSize, 10) || DEFAULT_SETTINGS.novelLibraryPageSize
     ));
@@ -1151,6 +1177,7 @@ function syncSettingsToUI() {
     sv('#ni-lib-page-size', cfg.novelLibraryPageSize ?? DEFAULT_SETTINGS.novelLibraryPageSize);
     niUpdateStageInjectionBudgetNote();
     niUpdateStageFullInjectUI();
+    niUpdateFuturePlotUI();
     niRefreshStageBlockToolbar();
     sv('#ni-dev-inj-pos', cfg.devInjPos  ?? DEFAULT_SETTINGS.devInjPos);
     sv('#ni-dev-inj-depth',cfg.devInjDepth?? DEFAULT_SETTINGS.devInjDepth);
@@ -1367,6 +1394,15 @@ function niSwitchPage(name, btn) {
     qa('.ni-nav-btn').forEach(b => b.classList.remove('on'));
     btn?.classList.add('on');
     q('#ni-scroll')?.scrollTo(0, 0);
+    if (name === 'stage') {
+        // 阶段页每次打开都按「当前阶段 / 阶段开关 / 屏蔽状态」重算一遍按钮与说明，
+        // 免得推进到下一阶段、或者开关几个阶段之后，提示还停在旧状态。
+        try {
+            niUpdateVecOffBtn();
+        } catch (e) {
+            console.warn('[NI] 刷新阶段页注入按钮失败:', e);
+        }
+    }
 }
 window.niSwitchPage = niSwitchPage;
 window.niSaveSettings = niSaveSettings;
@@ -3143,6 +3179,169 @@ function niUpdateStageFullInjectUI(precomputedPlan = null, precomputedUiState = 
     }
 }
 
+/**
+ * 「当前阶段也算进预告」默认开启：这正是这个功能最常被需要的用法——
+ * 没开全量直注时，当前阶段只发已经演到的节点，后面的节点模型看不到，容易写偏。
+ * 关掉它就和最初版本一样，只预告当前阶段之后的阶段。
+ */
+function niIsFuturePlotIncludeCurrent(settings = {}) {
+    return settings?.futurePlotIncludeCurrent !== false;
+}
+
+/**
+ * 当前阶段是不是「已经整段发过了」——是的话就不要再放进预告，否则同一段剧情
+ * 会在同一轮里出现两次。
+ *
+ * 两种情况算整段发过：
+ * 1. 开了「当前阶段全量直注」；
+ * 2. 普通模式下当前阶段是「未向量阶段」，走的是整阶段 raw 注入（穿书模式例外，
+ *    它只发当前节点，所以当前阶段剩下的节点仍然值得预告）。
+ */
+function niIsCurrentStageAlreadyFullyInjected(plan, cfg = extension_settings[EXT_NAME] || {}) {
+    if (plan?.fullStageInjectionApplied === true) return true;
+    if (cfg.transBookMode) return false;
+    const anchor = Number(plan?.directStageCurrentIdx);
+    if (!Number.isFinite(anchor) || anchor <= 0) return false;
+    return Array.isArray(plan?.directStageInjectionStages)
+        && plan.directStageInjectionStages.map(Number).includes(anchor);
+}
+
+/**
+ * 「未来剧情预告」按钮 / 说明的刷新。
+ *
+ * 与「当前阶段全量直注」不同，这个开关不依赖向量数据：只要阶段划分好了，
+ * 后面几个阶段就能提前发。所以按钮始终可见，说明里写清「本轮会发哪几个阶段」。
+ */
+function niUpdateFuturePlotUI(precomputedPlan = null) {
+    const btn = q('#ni-stage-future-inject');
+    const note = q('#ni-stage-future-note');
+    const cfg = extension_settings[EXT_NAME] || {};
+    const enabled = niIsFuturePlotInjectionEnabled(cfg);
+    const stageCount = niNormalizeFuturePlotStageCount(
+        cfg.futurePlotStages,
+        DEFAULT_SETTINGS.futurePlotStages,
+    );
+    const nodesPerStage = niNormalizeFuturePlotNodesPerStage(
+        cfg.futurePlotNodes,
+        DEFAULT_SETTINGS.futurePlotNodes,
+    );
+    const includeCurrent = niIsFuturePlotIncludeCurrent(cfg);
+    sv('#ni-future-stages', stageCount);
+    sv('#ni-future-nodes', nodesPerStage);
+    const includeChk = q('#ni-future-include-cur');
+    if (includeChk) includeChk.checked = includeCurrent;
+
+    if (btn) {
+        btn.classList.toggle('on', enabled);
+        btn.classList.toggle('off', !enabled);
+        btn.setAttribute('aria-checked', enabled ? 'true' : 'false');
+        btn.title = enabled
+            ? '未来剧情预告已开启：把当前阶段剩下的剧情和之后若干阶段的剧情提前注入，让 AI 知道后面会发生什么、提前埋伏笔。点击关闭。'
+            : '未来剧情预告：把「当前阶段剩下的节点」和「之后若干阶段」的剧情提前注入，让 AI 知道后面会发生什么，提前埋伏笔、把关键事件自然带出来。';
+    }
+
+    if (!note) return;
+    const plan = precomputedPlan || niResolveStageInjectionExecutionPlan(cfg);
+    const anchor = plan.directStageCurrentIdx;
+    const currentStageCovered = niIsCurrentStageAlreadyFullyInjected(plan, cfg);
+    const includeCurrentApplied = includeCurrent && !currentStageCovered;
+    const stageIndices = niResolveFuturePlotStageIndices({
+        stageCount: S.stageMapN,
+        currentStageIdx: anchor,
+        stageLimit: stageCount,
+        enabledStages: plan.enabledStages,
+        blockedStageIdxs: plan.blockedRecallStageIdxs,
+        includeCurrentStage: includeCurrentApplied,
+    });
+    const nodeLabel = nodesPerStage === 0 ? '全部节点' : `前 ${nodesPerStage} 个节点`;
+    const withCurrent = includeCurrentApplied && stageIndices[0] === Math.trunc(Number(anchor));
+    const futureOnly = withCurrent ? stageIndices.slice(1) : stageIndices;
+    let className = 'ni-stage-future-note';
+    let text;
+    if (!enabled) {
+        text = `开启后：${includeCurrent ? '当前阶段剩下的节点 + ' : ''}往后 ${stageCount} 个阶段、每阶段${nodeLabel}会提前注入（带「尚未演到、只作走向参考」的声明）。`;
+    } else if (!Number.isFinite(Number(anchor)) || Number(anchor) <= 0) {
+        className += ' ni-idle';
+        text = '已开启，但还没法确定当前是第几阶段（需要有开启的阶段，或穿书模式的当前节点），暂时不注入。';
+    } else if (stageCount <= 0 && !withCurrent) {
+        className += ' ni-idle';
+        text = '已开启，但「往后几个阶段」是 0 且没有勾选「当前阶段也算」，本轮不注入。';
+    } else if (!stageIndices.length) {
+        className += ' ni-idle';
+        text = `已开启，但当前是第 ${anchor} 阶段，后面没有可用的阶段（已经到最后一个阶段，或后面的阶段被关闭/屏蔽了），本轮不注入。`;
+    } else {
+        className += ' ni-active';
+        const parts = [];
+        if (withCurrent) {
+            parts.push(`第 ${anchor} 阶段剩下的${nodeLabel}`);
+        }
+        if (futureOnly.length) {
+            parts.push(`第 ${futureOnly.join('、')} 阶段（每阶段${nodeLabel}）`);
+        }
+        const currentHint = includeCurrent && !includeCurrentApplied
+            ? (plan.fullStageInjectionApplied === true
+                ? '当前阶段已由「全量直注」整段注入，这里不重复。'
+                : '当前阶段是未向量阶段、已经整段注入，这里不重复。')
+            : '';
+        text = `已生效：提前注入${parts.join('，')}。只作走向参考，不会打断当前剧情。${currentHint}`;
+    }
+    note.className = className;
+    note.textContent = text;
+}
+
+/**
+ * 组装本轮要发的「未来剧情预告」。没开启、没有可用的后续阶段、或者取不到正文时返回 null。
+ *
+ * 与阶段直注共用同一个 Token 上限（`plotInjMaxTokens`），装不下就在节点边界处停住，
+ * 不会把半句话切给模型。
+ */
+function niBuildFuturePlotInjectionPayload(plan, cfg = extension_settings[EXT_NAME] || {}) {
+    if (!niIsFuturePlotInjectionEnabled(cfg)) return null;
+    const stageCount = niNormalizeFuturePlotStageCount(
+        cfg.futurePlotStages,
+        DEFAULT_SETTINGS.futurePlotStages,
+    );
+    // 当前阶段已经整段发过了（全量直注 / 未向量阶段的整阶段注入）就别再塞进预告，
+    // 否则同一段剧情会在一轮里出现两次。
+    const includeCurrentStage = niIsFuturePlotIncludeCurrent(cfg)
+        && !niIsCurrentStageAlreadyFullyInjected(plan, cfg);
+    if (stageCount <= 0 && !includeCurrentStage) return null;
+    const stageIndices = niResolveFuturePlotStageIndices({
+        stageCount: S.stageMapN,
+        currentStageIdx: plan.directStageCurrentIdx,
+        stageLimit: stageCount,
+        enabledStages: plan.enabledStages,
+        blockedStageIdxs: plan.blockedRecallStageIdxs,
+        includeCurrentStage,
+    });
+    if (!stageIndices.length) return null;
+    const runtimeIndex = niBuildStageRuntimeIndex(S);
+    const blockedRecallContext = plan.blockedRecallContext?.active
+        ? plan.blockedRecallContext
+        : null;
+    const payload = niBuildFuturePlotPreview({
+        stageIndices,
+        nodesByStage: runtimeIndex.nodesByStage,
+        chunkIdxsByStage: runtimeIndex.chunkIdxsByStage,
+        nodesPerStage: cfg.futurePlotNodes,
+        rawMode: niNormalizeRawInjMode(cfg.rawInjMode),
+        maxTokens: niNormalizeRawInjectionMaxTokens(
+            cfg.plotInjMaxTokens,
+            DEFAULT_SETTINGS.plotInjMaxTokens,
+        ),
+        blockedContext: blockedRecallContext,
+        blockedChunkIdxs: plan.blockedRecallChunkIdxs || [],
+        currentStageIdx: plan.directStageCurrentIdx,
+        // 穿书模式知道「正在演哪个节点」，当前阶段就从它的下一个节点开始取，
+        // 已经演过的不再重复发；普通模式没有逐节点进度，从头取。
+        startAfterNodeId: plan.curTbNode ? niPlotNodeId(plan.curTbNode) : null,
+        getCompressedChunkText: chunkIdx => (S.chunkResults[chunkIdx] && S.chunkResults[chunkIdx].trim())
+            ? S.chunkResults[chunkIdx]
+            : (S.chunks[chunkIdx] || ''),
+    });
+    return payload.content ? payload : null;
+}
+
 function niUpdateVecOffBtn() {
     const btn = q('#ni-vec-off-btn');
     const modeWrap = q('.ni-stage-inj-mode-wrap');
@@ -3161,6 +3360,7 @@ function niUpdateVecOffBtn() {
     });
     niUpdateStageInjectionBudgetNote();
     niUpdateStageFullInjectUI(plan, uiState);
+    niUpdateFuturePlotUI(plan);
     // 无向量数据时隐藏按钮，始终显示未向量注入模式选择器
     if (!uiState.hasAnyVector) {
         if (btn) btn.style.display = 'none';
@@ -3626,6 +3826,24 @@ async function onPromptReady(eventData) {
         niUpdateStageInjectionBudgetNote(null, { visible: false });
     }
 
+    // ②.5 未来剧情预告（可选）：当前阶段之后若干阶段的剧情提前给模型，帮它把握走向。
+    // 与阶段直注互不影响：当前阶段仍然只发已演到的内容，这里只补「后面会发生什么」。
+    if (niIsFuturePlotInjectionEnabled(cfg)) {
+        try {
+            // 压缩原文模式要读清洗分段；上面 ② 只在「有未向量阶段」时才会按需加载，
+            // 这里补一次（已加载时是空操作），避免整阶段直注关闭时预告取不到正文。
+            if (niNormalizeRawInjMode(cfg.rawInjMode) === 'compressed') {
+                await niEnsureChunksLoaded();
+            }
+            const futurePlot = niBuildFuturePlotInjectionPayload(stageInjectionPlan, cfg);
+            if (futurePlot?.content) {
+                doInject(`${EXT_NAME}_future_plot`, futurePlot.content, plotPos, plotDepth, plotRole);
+            }
+        } catch (e) {
+            console.warn('[NI] 未来剧情预告注入失败:', e);
+        }
+    }
+
     // ③ 角色人设注入
     const charLines = [];
     if (S.characters.length) {
@@ -4042,6 +4260,37 @@ jQuery(async () => {
         cfg.curStageFullInject = !niIsFullStageInjectionEnabled(cfg);
         niSaveSettings();
         niUpdateVecOffBtn();
+    });
+    // 未来剧情预告：把「当前阶段之后」若干阶段的剧情提前注入。
+    $app.on('click', '#ni-stage-future-inject', () => {
+        if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
+        const cfg = extension_settings[EXT_NAME];
+        cfg.futurePlotPreview = !niIsFuturePlotInjectionEnabled(cfg);
+        niSaveSettings();
+        niUpdateFuturePlotUI();
+    });
+    // 只在 change（失焦/回车）时读值并回写：输入过程中不要把输入框改回旧值，
+    // 否则想清空重填时会一直被弹回去。
+    $app.on('change', '#ni-future-stages, #ni-future-nodes', () => {
+        if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
+        const cfg = extension_settings[EXT_NAME];
+        cfg.futurePlotStages = niNormalizeFuturePlotStageCount(
+            q('#ni-future-stages')?.value,
+            DEFAULT_SETTINGS.futurePlotStages,
+        );
+        cfg.futurePlotNodes = niNormalizeFuturePlotNodesPerStage(
+            q('#ni-future-nodes')?.value,
+            DEFAULT_SETTINGS.futurePlotNodes,
+        );
+        niSaveSettings();
+        niUpdateFuturePlotUI();
+    });
+    // 「当前阶段剩下的节点也算进预告」勾选框
+    $app.on('change', '#ni-future-include-cur', () => {
+        if (!extension_settings[EXT_NAME]) extension_settings[EXT_NAME] = {};
+        extension_settings[EXT_NAME].futurePlotIncludeCurrent = q('#ni-future-include-cur')?.checked !== false;
+        niSaveSettings();
+        niUpdateFuturePlotUI();
     });
 
     // 开关：启用/禁用演绎提示词
