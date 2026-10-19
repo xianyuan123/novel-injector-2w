@@ -253,6 +253,12 @@ import {
     niShowUndoBar,
 } from './lib/ui-system.js';
 
+import {
+    niBuildTimelineModel,
+    niNormalizeTimelineView,
+    niTimelineToHtml,
+} from './lib/timeline-system.js';
+
 // ============================================================
 // 常量
 // ============================================================
@@ -741,6 +747,7 @@ function niLoadSettings() {
                 niLoadPlotPagesFromChat();
                 renderPlots(); renderCharacters(); buildStages(); niRenderWorldSettings();
                 try { niUpdateOnboardUI(); } catch { /* 引导只是锦上添花 */ }
+                try { niLoadStageViewPreference(); niApplyStageView(_niStageView, { persist: false }); } catch { /* 视图偏好坏了就用列表 */ }
                 const cfg = extension_settings[EXT_NAME] || (extension_settings[EXT_NAME] = {});
                 cfg._stageStates = { ...(S.stageStates || {}) };
                 saveSettingsDebounced();
@@ -3484,6 +3491,104 @@ function niSetProgressAnchor(stageIdx, nodeId = null, { resetNode = false } = {}
     niRefreshInjStrategyUi();
 }
 
+// ============================================================
+// 阶段页视图：列表 / 时间线（时间线只读，点阶段或节点回到列表定位）
+// ============================================================
+
+const NI_STAGE_VIEW_KEY = 'ni_stage_view_v1';
+let _niStageView = 'list';
+
+function niLoadStageViewPreference() {
+    try {
+        _niStageView = niNormalizeTimelineView(localStorage.getItem(NI_STAGE_VIEW_KEY) || 'list');
+    } catch (e) {
+        _niStageView = 'list';
+    }
+    return _niStageView;
+}
+
+function niGetStageView() { return _niStageView; }
+
+function niCollectTimelineModel() {
+    const cfg = extension_settings[EXT_NAME] || {};
+    const total = Math.trunc(Number(S.stageMapN)) || 0;
+    const blocked = niBuildBlockedRecallContext(cfg);
+    const nodesByStage = {};
+    const nodeCharsByStage = {};
+    const stageOn = {};
+    const stageVec = {};
+    for (let i = 1; i <= total; i++) {
+        let entries = [];
+        try {
+            entries = niMergeStageNodes(getNodesForStage(i));
+        } catch (e) {
+            entries = [];
+        }
+        const groups = { main: [], sub: [], pivot: [] };
+        let chars = 0;
+        for (const node of entries) {
+            const lane = node?._type === 'sub' ? 'sub' : (node?._type === 'pivot' ? 'pivot' : 'main');
+            groups[lane].push(node);
+            chars += String(node?.title || '').length + 1 + String(node?.body || '').length;
+        }
+        nodesByStage[i] = groups;
+        nodeCharsByStage[i] = chars;
+        stageOn[i] = S.stageStates?.[i] !== false;
+        stageVec[i] = !!S.stageVecDone?.[i];
+    }
+    return niBuildTimelineModel({
+        stageCount: total,
+        stageTitles: S.stageTitles || {},
+        stageSummaries: S.stageSummaries || {},
+        stageOn,
+        stageVec,
+        nodesByStage,
+        nodeCharsByStage,
+        currentStageIdx: niResolveProgressAnchorStageIdx(cfg) || 0,
+        isStageBlocked: idx => blocked?.isStageBlocked?.(idx) === true,
+        isNodeBlocked: node => blocked?.isNodeBlocked?.(node) === true,
+    });
+}
+
+function niRenderTimeline() {
+    const box = q('#ni-timeline');
+    if (!box) return;
+    if (_niStageView !== 'timeline') { box.hidden = true; return; }
+    box.innerHTML = niTimelineToHtml(niCollectTimelineModel(), { esc: niEscHtml });
+}
+
+function niApplyStageView(mode, { persist = true } = {}) {
+    _niStageView = niNormalizeTimelineView(mode);
+    if (persist) {
+        try { localStorage.setItem(NI_STAGE_VIEW_KEY, _niStageView); } catch (e) { /* 隐私模式不可写就算了 */ }
+    }
+    const isTimeline = _niStageView === 'timeline';
+    const list = q('#ni-stage-list');
+    const pager = q('#ni-stage-pagination');
+    const box = q('#ni-timeline');
+    if (list) list.hidden = isTimeline;
+    if (pager) pager.style.display = isTimeline ? 'none' : '';
+    if (box) box.hidden = !isTimeline;
+    const listBtn = q('#ni-stage-view-list');
+    const tlBtn = q('#ni-stage-view-timeline');
+    if (listBtn) {
+        listBtn.classList.toggle('on', !isTimeline);
+        listBtn.setAttribute('aria-pressed', String(!isTimeline));
+    }
+    if (tlBtn) {
+        tlBtn.classList.toggle('on', isTimeline);
+        tlBtn.setAttribute('aria-pressed', String(isTimeline));
+    }
+    if (isTimeline) niRenderTimeline();
+}
+
+function niJumpFromTimeline(stageIdx) {
+    const idx = Math.trunc(Number(stageIdx)) || 0;
+    if (idx <= 0) return;
+    niApplyStageView('list');
+    window.niJumpToStage?.(idx);
+}
+
 function niUpdateStageInjPanel(expanded = null) {
     const bar = q('#ni-stage-inj-bar');
     const body = q('#ni-stage-inj-body');
@@ -3516,6 +3621,10 @@ function niRefreshInjStrategyUi() {
     niUpdateStageFullInjectUI(plan);
     niUpdateFuturePlotUI(plan);
     niUpdateStageInjSummary(plan);
+    // 时间线视图跟着阶段数据刷新（只读，出错不影响注入）
+    if (_niStageView === 'timeline') {
+        try { niRenderTimeline(); } catch (e) { console.warn('[NI] 时间线渲染失败:', e); }
+    }
 }
 
 // ============================================================
@@ -5145,6 +5254,18 @@ jQuery(async () => {
         niOpenInjectionPreview();
     });
     $app.on('click', '#ni-inj-preview-close', () => niCloseInjectionPreview());
+    // 阶段视图切换：列表 / 时间线
+    $app.on('click', '[data-stage-view]', (ev) => {
+        ev?.stopPropagation?.();
+        const mode = ev?.currentTarget?.dataset?.stageView || 'list';
+        niApplyStageView(mode);
+    });
+    // 时间线里点阶段或节点：切回列表并定位到对应阶段卡片
+    $app.on('click', '[data-tl-stage]', (ev) => {
+        ev?.stopPropagation?.();
+        const stageIdx = ev?.currentTarget?.dataset?.tlStage;
+        if (stageIdx) niJumpFromTimeline(stageIdx);
+    });
     $app.on('click', '#ni-inj-preview-recall', () => niRunInjectionPreviewRecall());
     $app.on('click', '#ni-inj-preview-modal', (ev) => {
         // 点背景（而不是弹窗本体）时关闭

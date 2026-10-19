@@ -1500,6 +1500,15 @@
         <div class="ni-stage-budget-note" id="ni-stage-inj-budget-note" style="display:none">未向量阶段单轮注入上限：32000 Token</div>
         </div>
 
+        <div class="ni-stage-view-row">
+          <div class="ni-seg" id="ni-stage-view-toggle" role="group" aria-label="阶段视图切换">
+            <button type="button" class="ni-seg-btn on" id="ni-stage-view-list" data-stage-view="list" aria-pressed="true" title="按阶段卡片逐条列出，可编辑概括与屏蔽"><i class="ti ti-list"></i>列表</button>
+            <button type="button" class="ni-seg-btn" id="ni-stage-view-timeline" data-stage-view="timeline" aria-pressed="false" title="横向时间线：一眼看清主线、支线、转折与当前进度"><i class="ti ti-timeline"></i>时间线</button>
+          </div>
+          <span class="ni-stage-view-hint" id="ni-stage-view-hint">时间线只看不改：点阶段或节点回到列表定位</span>
+        </div>
+        <div class="ni-timeline" id="ni-timeline" hidden></div>
+
         <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
           <label class="ni-pagination-size">每 <input type="number" id="ni-stage-page-size" value="20" min="1" max="200" step="1" aria-label="每页阶段数"> 一页</label>
           <div class="ni-pagination-current">

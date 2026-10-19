@@ -4517,3 +4517,215 @@ select.ni-modal-input {
   line-height: 1.5;
   word-break: break-word;
 }
+
+/* ============================================================
+   剧情时间线：阶段横向排开，主线 / 支线 / 转折分行
+   ============================================================ */
+.ni-stage-view-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 8px;
+  flex-wrap: wrap;
+}
+.ni-seg {
+  display: inline-flex;
+  border: 1px solid var(--ni-primary-border, #e6cdd5);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--ni-surface, #fff);
+}
+.ni-seg-btn {
+  border: 0;
+  background: transparent;
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  color: var(--ni-text-dim, #8a6270);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ni-seg-btn + .ni-seg-btn { border-left: 1px solid var(--ni-primary-border, #e6cdd5); }
+.ni-seg-btn:hover { background: var(--ni-primary-alpha-30, rgba(160, 68, 94, 0.08)); }
+.ni-seg-btn.on {
+  background: var(--ni-primary, #A0445E);
+  color: #fff;
+}
+.ni-seg-btn:focus-visible { outline: 2px solid var(--ni-primary, #A0445E); outline-offset: -2px; }
+.ni-stage-view-hint { font-size: 11px; color: var(--ni-text-faint, #a8919a); }
+
+.ni-timeline { margin: 2px 0 10px; }
+.ni-tl-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 2px 8px;
+  font-size: 11px;
+  color: var(--ni-text-dim, #8a6270);
+}
+.ni-tl-legend-title { font-size: 12px; font-weight: 600; color: var(--ni-text, #4a3a40); }
+.ni-tl-legend-item { display: inline-flex; align-items: center; gap: 3px; }
+.ni-tl-legend-item[data-lane="main"] { color: var(--ni-primary, #A0445E); }
+.ni-tl-legend-item[data-lane="sub"] { color: #3f7d8c; }
+.ni-tl-legend-item[data-lane="pivot"] { color: #b7791f; }
+.ni-tl-legend-now { color: var(--ni-primary, #A0445E); }
+.ni-tl-legend-blocked { color: var(--ni-text-faint, #a8919a); }
+.ni-tl-legend-stat { margin-left: auto; color: var(--ni-text-faint, #a8919a); }
+
+.ni-tl-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 10px;
+  scrollbar-width: thin;
+}
+.ni-tl-track {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  min-width: max-content;
+}
+.ni-tl-col {
+  position: relative;
+  flex: 0 0 auto;
+  width: 236px;
+  border: 1px solid var(--ni-primary-border, #ede0e4);
+  border-radius: 12px;
+  background: var(--ni-surface, #fff);
+  padding: 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow .15s, border-color .15s;
+}
+.ni-tl-col + .ni-tl-col::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  width: 16px;
+  height: 1px;
+  background: var(--ni-primary-border, #e6cdd5);
+}
+.ni-tl-col.is-current {
+  border-color: var(--ni-primary, #A0445E);
+  box-shadow: 0 0 0 2px var(--ni-primary-alpha-30, rgba(160, 68, 94, 0.12));
+}
+.ni-tl-col.is-off { background: #faf7f8; }
+.ni-tl-col.is-off .ni-tl-title,
+.ni-tl-col.is-off .ni-tl-node { opacity: .62; }
+.ni-tl-col.is-blocked {
+  background:
+    repeating-linear-gradient(135deg, #fbf8f9 0 6px, #f4eef0 6px 12px);
+}
+.ni-tl-col.is-blocked .ni-tl-title { text-decoration: line-through; }
+
+.ni-tl-head {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 2px 2px 4px;
+  cursor: pointer;
+  color: inherit;
+  border-radius: 8px;
+}
+.ni-tl-head:hover { background: var(--ni-primary-alpha-30, rgba(160, 68, 94, 0.07)); }
+.ni-tl-head:focus-visible { outline: 2px solid var(--ni-primary, #A0445E); outline-offset: 1px; }
+.ni-tl-num {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ni-primary, #A0445E);
+}
+.ni-tl-now {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 15px;
+  border-radius: 999px;
+  background: var(--ni-primary, #A0445E);
+  color: #fff;
+}
+.ni-tl-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 15px;
+  border-radius: 999px;
+  background: #f2ecee;
+  color: var(--ni-text-faint, #a8919a);
+}
+.ni-tl-badge-vec { background: #eaf5ee; color: #3f7d55; }
+.ni-tl-badge-block { background: #f7ebee; color: #a8506a; }
+.ni-tl-title {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ni-text, #4a3a40);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.ni-tl-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--ni-text-faint, #a8919a);
+}
+
+.ni-tl-lanes { display: flex; flex-direction: column; gap: 5px; }
+.ni-tl-lane { display: flex; gap: 6px; align-items: flex-start; }
+.ni-tl-lane-lbl {
+  flex: 0 0 26px;
+  padding-top: 3px;
+  font-size: 10px;
+  color: var(--ni-text-faint, #a8919a);
+  writing-mode: horizontal-tb;
+}
+.ni-tl-lane[data-lane="main"] .ni-tl-lane-lbl { color: var(--ni-primary, #A0445E); }
+.ni-tl-lane[data-lane="sub"] .ni-tl-lane-lbl { color: #3f7d8c; }
+.ni-tl-lane[data-lane="pivot"] .ni-tl-lane-lbl { color: #b7791f; }
+.ni-tl-lane-nodes { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.ni-tl-node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--ni-primary-border, #eadfe3);
+  border-left: 3px solid var(--ni-primary, #A0445E);
+  border-radius: 7px;
+  background: #fff;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ni-text, #4a3a40);
+  cursor: pointer;
+}
+.ni-tl-lane[data-lane="sub"] .ni-tl-node { border-left-color: #3f7d8c; }
+.ni-tl-lane[data-lane="pivot"] .ni-tl-node { border-left-color: #b7791f; }
+.ni-tl-node:hover { background: var(--ni-primary-alpha-30, rgba(160, 68, 94, 0.07)); }
+.ni-tl-node:focus-visible { outline: 2px solid var(--ni-primary, #A0445E); outline-offset: 1px; }
+.ni-tl-node i { font-size: 11px; opacity: .7; flex: 0 0 auto; }
+.ni-tl-node-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ni-tl-node.is-blocked {
+  border-style: dashed;
+  border-left-style: solid;
+  color: var(--ni-text-faint, #a8919a);
+  text-decoration: line-through;
+  background: #fbf8f9;
+}
+.ni-tl-lane-empty { color: var(--ni-text-faint, #a8919a); }
+.ni-tl-empty-txt { font-size: 11px; }
+.ni-tl-empty {
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ni-text-faint, #a8919a);
+}
