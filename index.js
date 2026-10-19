@@ -161,6 +161,8 @@ import {
     niFormatRelationsForStage,
     niFormatKnowledgeForStage,
     niFindCharAppearances,
+    niCollectCharNames,
+    niFormatAliasHint,
     niSummarizeAppearances,
     niFormatAppearanceSummary,
 } from './lib/char-canon.js';
@@ -4646,7 +4648,7 @@ function niOpenCharAppearances(idx) {
     const titleEl = q('#ni-char-app-title');
     if (titleEl) titleEl.textContent = `出场索引 · ${c?.name || '角色'}`;
     const nodes = niCollectCharAppearanceNodes();
-    const appearances = niFindCharAppearances({ name: c?.name || '', nodes });
+    const appearances = niFindCharAppearances({ names: niCollectCharNames(c), nodes });
     const summary = niSummarizeAppearances(appearances);
     const sumEl = q('#ni-char-app-sum');
     if (sumEl) sumEl.textContent = `${niFormatAppearanceSummary(summary)}（共扫描 ${nodes.length} 个节点）`;
@@ -4720,6 +4722,9 @@ function niBuildCharInjectionText(plan = null) {
                 const relText = niFormatRelationsForStage(c.relations2, canonStageIdx);
                 if (relText) lines.push(canonStageIdx > 0 ? `关系（第 ${canonStageIdx} 阶段）：${relText}` : `关系：${relText}`);
             }
+            // A：别名/称呼表——原著里同一个人常有本名/道号/绰号，模型只认一个名字会漏
+            const aliasText = niFormatAliasHint(c.aliases);
+            if (aliasText) lines.push(`别名：${aliasText}（正文或对话里可能这样称呼）`);
             const knowText = niFormatKnowledgeForStage(c.knowledge, canonStageIdx);
             if (knowText) lines.push(`知情：${knowText}`);
             if (lines.length > 1) charLines.push(lines.join('\n'));
