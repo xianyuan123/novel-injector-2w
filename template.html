@@ -1091,13 +1091,26 @@
             <button class="ni-bulk-btn on" id="ni-char-enable-all-simple" title="开启当前分类全部角色注入"><i class="ti ti-check"></i>全部开启</button>
             <button class="ni-bulk-btn off" id="ni-char-disable-all-simple" title="关闭当前分类全部角色注入"><i class="ti ti-x"></i>全部关闭</button>
           </div>
+        <div class="ni-char-search-row">
+          <div class="ni-char-search">
+            <i class="ti ti-search" aria-hidden="true"></i>
+            <input id="ni-char-search" type="search" placeholder="搜名字 / 身份 / 性格 / 关系…" autocomplete="off" aria-label="搜索角色">
+            <button type="button" id="ni-char-search-clear" class="ni-char-search-clear" title="清空搜索" aria-label="清空搜索" hidden><i class="ti ti-x" aria-hidden="true"></i></button>
+          </div>
+          <select id="ni-char-sort" class="ni-char-sort" title="排序方式" aria-label="角色排序方式">
+            <option value="stage">按登场阶段</option>
+            <option value="name">按名字</option>
+            <option value="length">按人设长度</option>
+          </select>
+        </div>
           <!-- 第二排：tab + 增删-->
           <div class="ni-tabs-row">
             <div class="ni-tab-row" id="ni-char-tab-row">
-              <button class="ni-tab on" data-role="主角">主角</button>
-              <button class="ni-tab" data-role="配角">配角</button>
-              <button class="ni-tab" data-role="反派">反派</button>
-              <button class="ni-tab" data-role="其他">其他</button>
+              <button class="ni-tab on" data-role="主角">主角<span class="ni-tab-count">0</span></button>
+              <button class="ni-tab" data-role="配角">配角<span class="ni-tab-count">0</span></button>
+              <button class="ni-tab" data-role="反派">反派<span class="ni-tab-count">0</span></button>
+              <button class="ni-tab" data-role="其他">其他<span class="ni-tab-count">0</span></button>
+              <button class="ni-tab" data-role="全部">全部<span class="ni-tab-count">0</span></button>
             </div>
             <div class="ni-vdiv"></div>
             <div class="ni-pm-group">
@@ -1448,56 +1461,77 @@
           <i class="ti ti-chevron-down ni-stage-inj-chevron"></i>
         </div>
         <div class="ni-stage-inj-body" id="ni-stage-inj-body">
-        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 语义向量召回；未向量＋开启 → 按「未向量注入」模式整段注入；关闭 → 跳过。下面三组开关分别管：当前阶段整段直注、未来剧情预告、召回屏蔽。</div>
-        <div class="ni-stage-progress-row" id="ni-stage-progress-row">
-          <span class="ni-stage-progress-label" title="告诉插件你演到哪了：全量直注取这一阶段，未来预告从这一阶段的这个节点之后开始。0 = 自动（取最后开启的阶段）。"><i class="ti ti-map-pin"></i>进度锚点</span>
-          <label class="ni-stage-progress-field">第
-            <input type="number" id="ni-progress-stage" min="0" max="999" step="1" value="0" aria-label="当前演到第几阶段，0 为自动">
-            阶段
-          </label>
-          <select id="ni-progress-node" class="ni-stage-progress-node" aria-label="当前演到该阶段的哪个节点" title="选中的节点会被视为「已经演过」，未来的预告从它后面开始">
-            <option value="">从阶段开头</option>
-          </select>
-          <button class="ni-bulk-btn off" id="ni-progress-clear" type="button" title="清掉锚点，回到自动判断"><i class="ti ti-eraser"></i>自动</button>
-          <span class="ni-stage-progress-hint" id="ni-stage-progress-hint"></span>
-        </div>
-        <div class="ni-stage-bulk-row">
-          <div class="ni-stage-inj-mode-wrap">
-            <label class="ni-stage-inj-mode-lbl">未向量注入</label>
-            <select id="ni-raw-inj-mode" class="ni-stage-inj-mode-sel">
-              <option value="nodes" selected>剧情节点</option>
-              <option value="compressed">压缩原文</option>
-            </select>
+        <div class="ni-hint-box"><i class="ti ti-info-circle"></i>已向量＋开启 → 向量召回；未向量＋开启 → 按「未向量注入」整段；关闭 → 跳过。</div>
+
+        <div class="ni-inj-group">
+          <div class="ni-inj-head"><i class="ti ti-list-check"></i><span class="ni-inj-title">阶段启用</span><span class="ni-inj-sub">关掉的阶段不参与召回，也不进直注</span></div>
+          <div class="ni-stage-bulk-row">
+            <button class="ni-bulk-btn on" id="ni-stage-enable-all" title="开启所有阶段"><i class="ti ti-check"></i>全部开启</button>
+            <button class="ni-bulk-btn off" id="ni-stage-disable-all" title="关闭所有阶段"><i class="ti ti-x"></i>全部关闭</button>
+            <button class="ni-bulk-btn off" id="ni-stage-batch-open" title="一次列出所有阶段，勾选完一次性启用/关闭，支持每页 20 或 30 个"><i class="ti ti-checkbox"></i>批量勾选</button>
           </div>
-          <button class="ni-bulk-btn off" id="ni-stage-full-inject" role="switch" aria-checked="false" title="当前阶段整段直注：不裁剪、不召回，把当前阶段的剧情节点（或压缩原文）整段注入。更早的阶段仍然按向量语义召回。"><i class="ti ti-arrow-bar-to-down"></i>当前阶段全量直注</button>
-          <button class="ni-bulk-btn on" id="ni-stage-enable-all" title="开启所有阶段"><i class="ti ti-check"></i>全部开启</button>
-          <button class="ni-bulk-btn off" id="ni-stage-disable-all" title="关闭所有阶段"><i class="ti ti-x"></i>全部关闭</button>
-          <button class="ni-bulk-btn off" id="ni-stage-batch-open" title="一次列出所有阶段，勾选完一次性启用/关闭，支持每页 20 或 30 个"><i class="ti ti-checkbox"></i>批量勾选</button>
         </div>
-        <div class="ni-stage-full-inject-note" id="ni-stage-full-inject-note"></div>
-        <div class="ni-stage-future-row">
-          <button class="ni-bulk-btn off" id="ni-stage-future-inject" role="switch" aria-checked="false" title="未来剧情预告：把「当前阶段剩下的节点」和「之后若干阶段」的剧情提前注入，让 AI 知道后面会发生什么，提前埋伏笔、把关键事件自然带出来。"><i class="ti ti-fast-forward"></i>未来剧情预告</button>
-          <label class="ni-future-field">往后
-            <input type="number" id="ni-future-stages" value="1" min="0" max="20" step="1" aria-label="往后注入几个阶段">
-            个阶段
-          </label>
-          <label class="ni-future-field">每阶段
-            <input type="number" id="ni-future-nodes" value="2" min="0" max="20" step="1" aria-label="每个阶段取几个节点">
-            个节点
-          </label>
-          <label class="ni-future-field ni-future-check" title="没开「当前阶段全量直注」时，当前阶段只发已经演到的节点，剩下的节点 AI 看不到，容易写偏。勾上它就把当前阶段接下来的节点也放进预告。">
-            <input type="checkbox" id="ni-future-include-cur" checked aria-label="当前阶段剩下的节点也算进预告">
-            当前阶段也算
-          </label>
+
+        <div class="ni-inj-group">
+          <div class="ni-inj-head"><i class="ti ti-arrow-bar-to-down"></i><span class="ni-inj-title">注入范围</span><span class="ni-inj-sub">当前阶段要不要整段交给 AI</span></div>
+          <div class="ni-stage-bulk-row">
+            <div class="ni-stage-inj-mode-wrap">
+              <label class="ni-stage-inj-mode-lbl">未向量注入</label>
+              <select id="ni-raw-inj-mode" class="ni-stage-inj-mode-sel">
+                <option value="nodes" selected>剧情节点</option>
+                <option value="compressed">压缩原文</option>
+              </select>
+            </div>
+            <button class="ni-bulk-btn off" id="ni-stage-full-inject" role="switch" aria-checked="false" title="当前阶段整段直注：不裁剪、不召回，把当前阶段的剧情节点（或压缩原文）整段注入。更早的阶段仍然按向量语义召回。"><i class="ti ti-arrow-bar-to-down"></i>当前阶段全量直注</button>
+          </div>
+          <div class="ni-stage-full-inject-note" id="ni-stage-full-inject-note"></div>
         </div>
-        <div class="ni-stage-future-note" id="ni-stage-future-note"></div>
-        <div class="ni-stage-block-bar">
-          <span class="ni-block-hint"><i class="ti ti-eye-off"></i>召回屏蔽·全局</span>
-          <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-prev" data-stage-block-action="block-prev" title="把当前阶段之前的阶段整段屏蔽，不再进向量召回与阶段直注"><i class="ti ti-eye-off"></i>一键屏蔽之前阶段</button>
-          <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-pick-stages" data-stage-block-action="toggle-pick" title="在每个阶段卡片上显示勾选框，可跨多个阶段勾选后一次性屏蔽"><i class="ti ti-checkbox"></i>多选阶段</button>
-          <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-apply" data-stage-block-action="apply-picked" style="display:none" title="把勾选的阶段整段屏蔽"><i class="ti ti-eye-off"></i>屏蔽勾选的阶段</button>
-          <span class="ni-stage-block-hint" id="ni-stage-block-hint"></span>
+
+        <div class="ni-inj-group">
+          <div class="ni-inj-head"><i class="ti ti-fast-forward"></i><span class="ni-inj-title">提前预告</span><span class="ni-inj-sub">让 AI 知道后面会发生什么，好提前埋伏笔</span></div>
+          <div class="ni-stage-future-row">
+            <button class="ni-bulk-btn off" id="ni-stage-future-inject" role="switch" aria-checked="false" title="未来剧情预告：把「当前阶段剩下的节点」和「之后若干阶段」的剧情提前注入，让 AI 知道后面会发生什么，提前埋伏笔、把关键事件自然带出来。"><i class="ti ti-fast-forward"></i>开启预告</button>
+            <label class="ni-future-field">往后
+              <input type="number" id="ni-future-stages" value="1" min="0" max="20" step="1" aria-label="往后注入几个阶段">
+              个阶段
+            </label>
+            <label class="ni-future-field">每阶段
+              <input type="number" id="ni-future-nodes" value="2" min="0" max="20" step="1" aria-label="每个阶段取几个节点">
+              个节点
+            </label>
+            <label class="ni-future-field ni-future-check" title="没开「当前阶段全量直注」时，当前阶段只发已经演到的节点，剩下的节点 AI 看不到，容易写偏。勾上它就把当前阶段接下来的节点也放进预告。">
+              <input type="checkbox" id="ni-future-include-cur" checked aria-label="当前阶段剩下的节点也算进预告">
+              当前阶段也算
+            </label>
+          </div>
+          <div class="ni-stage-future-note" id="ni-stage-future-note"></div>
         </div>
+
+        <div class="ni-inj-group">
+          <div class="ni-inj-head"><i class="ti ti-eye-off"></i><span class="ni-inj-title">召回屏蔽</span><span class="ni-inj-sub">屏蔽过的阶段不进召回与阶段直注</span></div>
+          <div class="ni-stage-block-bar">
+            <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-prev" data-stage-block-action="block-prev" title="把当前阶段之前的阶段整段屏蔽，不再进向量召回与阶段直注"><i class="ti ti-eye-off"></i>一键屏蔽之前阶段</button>
+            <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-pick-stages" data-stage-block-action="toggle-pick" title="在每个阶段卡片上显示勾选框，可跨多个阶段勾选后一次性屏蔽"><i class="ti ti-checkbox"></i>多选阶段</button>
+            <button class="ni-bulk-btn ni-block-btn off" id="ni-stage-block-apply" data-stage-block-action="apply-picked" style="display:none" title="把勾选的阶段整段屏蔽"><i class="ti ti-eye-off"></i>屏蔽勾选的阶段</button>
+            <span class="ni-stage-block-hint" id="ni-stage-block-hint"></span>
+          </div>
+        </div>
+
+        <div class="ni-inj-group">
+          <div class="ni-inj-head"><i class="ti ti-map-pin"></i><span class="ni-inj-title">进度锚点</span><span class="ni-inj-sub">你演到哪了：决定直注取哪一段、预告从哪开始</span></div>
+          <div class="ni-stage-progress-row" id="ni-stage-progress-row">
+            <label class="ni-stage-progress-field">第
+              <input type="number" id="ni-progress-stage" min="0" max="999" step="1" value="0" aria-label="当前演到第几阶段，0 为自动">
+              阶段
+            </label>
+            <select id="ni-progress-node" class="ni-stage-progress-node" aria-label="当前演到该阶段的哪个节点" title="选中的节点会被视为「已经演过」，未来的预告从它后面开始">
+              <option value="">从阶段开头</option>
+            </select>
+            <button class="ni-bulk-btn off" id="ni-progress-clear" type="button" title="清掉锚点，回到自动判断"><i class="ti ti-eraser"></i>自动</button>
+            <span class="ni-stage-progress-hint" id="ni-stage-progress-hint"></span>
+          </div>
+        </div>
+
         <div class="ni-stage-budget-note" id="ni-stage-inj-budget-note" style="display:none">未向量阶段单轮注入上限：32000 Token</div>
         </div>
 

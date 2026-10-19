@@ -4828,3 +4828,188 @@ select.ni-modal-input {
 .ni-stage-batch-tools .ni-bulk-btn { padding: 4px 9px; font-size: 12px; }
 .ni-stage-batch-tools .ni-bulk-btn:disabled { opacity: .45; cursor: default; }
 .ni-stage-batch-pager .ni-page-btn:disabled { opacity: .4; cursor: default; }
+
+/* ── 注入策略折叠区：分组卡片（同一类开关收进一张卡，减少堆叠感） ────── */
+.ni-stage-inj-body { padding-top: 2px; }
+.ni-inj-group {
+  margin: 0 0 7px;
+  padding: 8px 10px 9px;
+  border-radius: 8px;
+  background: var(--color-background-secondary, #F7F7F8);
+  border: .5px solid var(--color-border-tertiary, #E5E5E7);
+}
+.ni-inj-group:last-of-type { margin-bottom: 5px; }
+.ni-inj-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+.ni-inj-head .ti {
+  font-size: 13px;
+  color: var(--ni-primary, #A0445E);
+  opacity: .85;
+}
+.ni-inj-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary, #222);
+}
+.ni-inj-sub {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #999);
+  line-height: 1.4;
+}
+/* 组内不再画第二层底板，避免「盒子里套盒子」 */
+.ni-inj-group .ni-stage-bulk-row,
+.ni-inj-group .ni-stage-future-row,
+.ni-inj-group .ni-stage-progress-row,
+.ni-inj-group .ni-stage-block-bar {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+.ni-inj-group .ni-stage-bulk-row { margin-bottom: 0; }
+.ni-inj-group .ni-stage-full-inject-note,
+.ni-inj-group .ni-stage-future-note { margin: 6px 0 0; }
+.ni-inj-group .ni-stage-block-hint,
+.ni-inj-group .ni-stage-progress-hint { margin-left: auto; }
+.ni-stage-inj-body > .ni-hint-box { margin-top: 0; margin-bottom: 7px; }
+.ni-stage-inj-body > .ni-stage-budget-note { margin: 0 0 2px; }
+
+/* 组内说明文字：去掉整块色底，只留左侧细线，降低视觉重量 */
+.ni-inj-group #ni-stage-full-inject { margin-left: 0; }
+.ni-inj-group .ni-stage-full-inject-note,
+.ni-inj-group .ni-stage-future-note {
+  margin: 6px 0 0;
+  padding: 1px 0 1px 8px;
+  font-size: 11px;
+  line-height: 1.55;
+  background: none;
+  border: none;
+  border-left: 2px solid var(--color-border-secondary, #DCDCDE);
+  border-radius: 0;
+  color: var(--color-text-tertiary, #8A8A8A);
+}
+.ni-inj-group .ni-stage-full-inject-note.ni-active,
+.ni-inj-group .ni-stage-future-note.ni-active {
+  background: none;
+  color: var(--ni-success-text, #0F6E56);
+  border-left-color: var(--ni-success-text, #0F6E56);
+}
+.ni-inj-group .ni-stage-full-inject-note.ni-idle,
+.ni-inj-group .ni-stage-future-note.ni-idle {
+  background: none;
+  color: var(--ni-warning-text, #C05A62);
+  border-left-color: var(--ni-warning-text, #C05A62);
+}
+
+/* 没有内容时不要留下一条 2px 的色块 */
+.ni-inj-group .ni-stage-full-inject-note:empty,
+.ni-inj-group .ni-stage-future-note:empty { display: none; }
+
+/* ===== 角色页：搜索 / 排序 / 人数徽标 ===== */
+.ni-char-search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.ni-char-search {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+.ni-char-search > .ti {
+    position: absolute;
+    left: 9px;
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+}
+.ni-char-search input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 28px 6px 28px;
+    font-size: 12px;
+    color: var(--color-text-primary);
+    background: var(--color-background-secondary);
+    border: .5px solid var(--color-border-tertiary);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color .14s, background .14s;
+}
+.ni-char-search input::placeholder { color: var(--color-text-tertiary); }
+.ni-char-search input:focus {
+    border-color: var(--ni-primary-border, var(--ni-primary, #A0445E));
+    background: var(--color-background-primary);
+}
+.ni-char-search input::-webkit-search-cancel-button { display: none; }
+.ni-char-search-clear {
+    position: absolute;
+    right: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--color-background-tertiary);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+}
+.ni-char-search-clear:hover { background: var(--color-background-quaternary, var(--color-background-tertiary)); color: var(--color-text-primary); }
+.ni-char-search-clear[hidden] { display: none; }
+.ni-char-sort {
+    flex: 0 0 auto;
+    max-width: 130px;
+    padding: 6px 6px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    background: var(--color-background-secondary);
+    border: .5px solid var(--color-border-tertiary);
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+}
+.ni-char-sort:focus { border-color: var(--ni-primary-border, var(--ni-primary, #A0445E)); }
+.ni-tab-count {
+    display: inline-block;
+    min-width: 14px;
+    margin-left: 4px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--color-background-tertiary);
+    color: var(--color-text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 15px;
+    text-align: center;
+}
+.ni-tab.on .ni-tab-count {
+    background: var(--ni-primary-soft-strong, rgba(160, 68, 94, .18));
+    color: var(--ni-primary-soft-text, #8B3A50);
+}
+.ni-tab-count.is-zero { opacity: .45; }
+mark.ni-hl {
+    padding: 0 1px;
+    border-radius: 2px;
+    background: var(--ni-primary-soft-strong, rgba(160, 68, 94, .2));
+    color: inherit;
+}
+
+/* 角色卡片上的人设字数小标 */
+.ni-char-len {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+}

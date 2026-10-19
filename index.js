@@ -6112,6 +6112,41 @@ jQuery(async () => {
     $app.on('click', '#ni-char-tab-row .ni-tab', function() {
         niSwitchCharTab($(this).data('role'));
     });
+    // 角色搜索（防抖 160ms，避免每敲一个字都重排整个列表）
+    let _niCharSearchTimer = 0;
+    function niSyncCharSearchClear(hasText) {
+        const btn = q('#ni-char-search-clear');
+        if (btn) btn.hidden = !hasText;
+    }
+    $app.on('input', '#ni-char-search', function() {
+        const value = String(this.value || '');
+        niSyncCharSearchClear(!!value);
+        if (_niCharSearchTimer) clearTimeout(_niCharSearchTimer);
+        _niCharSearchTimer = setTimeout(() => {
+            _niCharSearchTimer = 0;
+            window.niSetCharQuery?.(value);
+        }, 160);
+    });
+    $app.on('keydown', '#ni-char-search', function(e) {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        this.value = '';
+        niSyncCharSearchClear(false);
+        if (_niCharSearchTimer) { clearTimeout(_niCharSearchTimer); _niCharSearchTimer = 0; }
+        window.niSetCharQuery?.('');
+    });
+    $app.on('click', '#ni-char-search-clear', function(e) {
+        e.preventDefault();
+        const input = q('#ni-char-search');
+        if (input) input.value = '';
+        niSyncCharSearchClear(false);
+        if (_niCharSearchTimer) { clearTimeout(_niCharSearchTimer); _niCharSearchTimer = 0; }
+        window.niSetCharQuery?.('');
+        input?.focus();
+    });
+    $app.on('change', '#ni-char-sort', function() {
+        window.niSetCharSort?.(this.value);
+    });
     $app.on('change', '#ni-char-page-size', function() {
         niSetCharPageSize(this.value);
     });
@@ -6283,17 +6318,12 @@ jQuery(async () => {
         niSaveSettings();
         renderCharacters();
     });
-    // 全开当前 tab 角色
+    // 全开 / 全关：作用于「当前筛选出来的角色」（分类 + 搜索词），不再固定整个分类
     $app.on('click', '#ni-char-enable-all, #ni-char-enable-all-simple', () => {
-        const charTab = niGetCurrentCharTab();
-        S.characters.forEach(c => { if ((c.role || '其他') === charTab) { c.enabled = true; niClearCharAutoSleep(c); } });
-        niSaveSettings(); renderCharacters();
+        window.niApplyCharsEnabledToFiltered?.(true);
     });
-    // 全关当前 tab 角色
     $app.on('click', '#ni-char-disable-all, #ni-char-disable-all-simple', () => {
-        const charTab = niGetCurrentCharTab();
-        S.characters.forEach(c => { if ((c.role || '其他') === charTab) { c.enabled = false; niClearCharAutoSleep(c); } });
-        niSaveSettings(); renderCharacters();
+        window.niApplyCharsEnabledToFiltered?.(false);
     });
     // 阶段抽屉：触发按钮开关
     $app.on('click', '#ni-drawer-trigger', function(e) {
