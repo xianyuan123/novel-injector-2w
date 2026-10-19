@@ -155,6 +155,15 @@ import {
     restorePlotCheckpointMemory,
     createStoryController,
 } from './lib/story-data.js';
+import {
+    niIsCharExited,
+    niNormalizeRelationRows,
+    niFormatRelationsForStage,
+    niFormatKnowledgeForStage,
+    niFindCharAppearances,
+    niSummarizeAppearances,
+    niFormatAppearanceSummary,
+} from './lib/char-canon.js';
 
 import {
     buildRechunkLayout,
@@ -3795,7 +3804,7 @@ function niBuildInjectionPreviewSections(precomputedPlan = null) {
         push('global_head', '全局头部提示词', cfg.globalPrompt,
             niInjMetaLabel(cfg.globalHeadInjPos, cfg.globalHeadInjDepth, cfg.globalHeadInjRole, '拼在消息里'));
     }
-    push('char', '原著角色人设', niBuildCharInjectionText(),
+    push('char', '原著角色人设', niBuildCharInjectionText(precomputedPlan),
         niInjMetaLabel(cfg.charInjPos, cfg.charInjDepth, cfg.charInjRole));
     push('world', '世界设定', niBuildWorldInjectionText(niGetWorldCategories()),
         niInjMetaLabel(cfg.worldInjPos, cfg.worldInjDepth, cfg.worldInjRole));
@@ -4601,18 +4610,92 @@ function niBuildCurrentStageNodeRecallQuery(scope, curTbNode) {
  * 组装「原著角色人设」注入正文。注入主链和「注入预览」共用同一个构造函数，
  * 避免预览看到的内容和真正发出去的内容各写一套、慢慢跑偏。
  */
-function niBuildCharInjectionText() {
+/** F：把「当前所有阶段的所有节点正文」摊平，供出场索引扫描 */
+function niCollectCharAppearanceNodes() {
+    const out = [];
+    const total = Math.trunc(Number(S.stageMapN)) || 0;
+    for (let stageIdx = 1; stageIdx <= total; stageIdx++) {
+        let entries = [];
+        try {
+            entries = niMergeStageNodes(getNodesForStage(stageIdx));
+        } catch (e) {
+            entries = [];
+        }
+        for (const node of entries) {
+            out.push({
+                id: niPlotNodeId(node),
+                title: node?.title || '',
+                stageIdx,
+                text: node?.body || node?.text || '',
+            });
+        }
+    }
+    return out;
+}
+
+function niCloseCharAppearances() {
+    const modal = q('#ni-char-app-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+/** F：出场索引（只读）——这个角色在正文里到底出现在哪些节点 */
+function niOpenCharAppearances(idx) {
+    const modal = q('#ni-char-app-modal');
+    if (!modal) return;
+    const c = S.characters?.[Math.trunc(Number(idx)) || 0];
+    const titleEl = q('#ni-char-app-title');
+    if (titleEl) titleEl.textContent = `出场索引 · ${c?.name || '角色'}`;
+    const nodes = niCollectCharAppearanceNodes();
+    const appearances = niFindCharAppearances({ name: c?.name || '', nodes });
+    const summary = niSummarizeAppearances(appearances);
+    const sumEl = q('#ni-char-app-sum');
+    if (sumEl) sumEl.textContent = `${niFormatAppearanceSummary(summary)}（共扫描 ${nodes.length} 个节点）`;
+    const list = q('#ni-char-app-list');
+    if (!list) { modal.style.display = 'flex'; return; }
+    if (!appearances.length) {
+        list.innerHTML = `<div class="ni-char-app-empty">正文里没有出现「${niEscHtml(c?.name || '')}」。<br>可能是名字写法与正文不一致，或者这个角色还没登场。</div>`;
+    } else {
+        list.innerHTML = appearances.map(item => `<div class="ni-char-app-item">
+  <div class="ni-char-app-head">
+    <button type="button" class="ni-char-app-stage" data-app-stage="${item.stageIdx}">第 ${item.stageIdx} 阶段</button>
+    <span class="ni-char-app-node">${niEscHtml(item.nodeTitle || '未命名节点')}</span>
+    <span class="ni-char-app-hits">${item.hits} 处</span>
+  </div>
+  <div class="ni-char-app-snippet">${niEscHtml(item.snippet)}</div>
+</div>`).join('');
+    }
+    modal.style.display = 'flex';
+}
+
+/**
+ * 计算「按哪一阶段算角色原著设定」：
+ * 优先用本轮执行计划里的直注阶段（有锚点就是锚点阶段），否则回落到锚点/0。
+ */
+function niResolveCharCanonStage(plan = null, cfg = extension_settings[EXT_NAME] || {}) {
+    const fromPlan = parseInt(plan?.directStageCurrentIdx, 10);
+    if (Number.isFinite(fromPlan) && fromPlan > 0) return fromPlan;
+    return niResolveProgressAnchorStageIdx(cfg) ?? 0;
+}
+
+function niBuildCharInjectionText(plan = null) {
     const charLines = [];
+    const cfgForCanon = extension_settings[EXT_NAME] || {};
+    const canonStageIdx = niResolveCharCanonStage(plan, cfgForCanon);
     if (S.characters.length) {
         const userSubCfg = niGetUserSubConfig();
         S.characters.forEach((c, idx) => {
             if (!c.name) return;
             if (c.enabled === false) return;
+            // C：到了退场阶段就不再把这个人当活人注入
+            if (niIsCharExited(c, canonStageIdx)) return;
             if (niIsUserSubReplaceSelectedChar(idx, userSubCfg)) return;
             const isUserSubPlayChar = niIsUserSubSelectedChar(idx, userSubCfg) && niIsUserSubPlayMode(userSubCfg);
             const lines = isUserSubPlayChar
                 ? [`[用户扮演原著角色资料：<user>（原著角色：${c.name}；${c.role || '其他'}）]`]
                 : [`[原著角色NPC：${c.name}（${c.role || '其他'}）]`];
+            // D：有结构化关系时，不再用自由文本那段（避免「师父」在第 8 阶段还在喊）
+            const hasStructuredRelations = niNormalizeRelationRows(c.relations2).length > 0;
+            const freeRelations = hasStructuredRelations ? '' : (c.relations || '');
             const showRaw = c.showRaw !== false;
             const showAi  = niGetCharAiShowEnabled(idx);
             const aiProfile = niGetCharAiProfile(idx);
@@ -4622,7 +4705,7 @@ function niBuildCharInjectionText() {
                     if (p.identity)    lines.push(`身份：${p.identity}`);
                     if (p.appearance)  lines.push(`外貌：${p.appearance}`);
                     if (p.personality) lines.push(`性格：${p.personality}`);
-                    if (p.relations)   lines.push(`关系：${p.relations}`);
+                    if (p.relations && !hasStructuredRelations) lines.push(`关系：${p.relations}`);
                 } else {
                     lines.push(aiProfile);
                 }
@@ -4630,8 +4713,15 @@ function niBuildCharInjectionText() {
                 if (c.identity)    lines.push(`身份：${c.identity}`);
                 if (c.appearance)  lines.push(`外貌：${c.appearance}`);
                 if (c.personality) lines.push(`性格：${c.personality}`);
-                if (c.relations)   lines.push(`关系：${c.relations}`);
+                if (freeRelations) lines.push(`关系：${freeRelations}`);
             }
+            // D：按当前阶段取关系；E：只注入「这个阶段已经该知道的事」
+            if (hasStructuredRelations) {
+                const relText = niFormatRelationsForStage(c.relations2, canonStageIdx);
+                if (relText) lines.push(canonStageIdx > 0 ? `关系（第 ${canonStageIdx} 阶段）：${relText}` : `关系：${relText}`);
+            }
+            const knowText = niFormatKnowledgeForStage(c.knowledge, canonStageIdx);
+            if (knowText) lines.push(`知情：${knowText}`);
             if (lines.length > 1) charLines.push(lines.join('\n'));
         });
     }
@@ -4976,7 +5066,7 @@ async function onPromptReady(eventData) {
     }
 
     // ③ 角色人设注入（取文与「注入预览」共用 niBuildCharInjectionText，两边不会跑偏）
-    const charContent = niBuildCharInjectionText();
+    const charContent = niBuildCharInjectionText(plan);
     if (charContent) {
         doInject(`${EXT_NAME}_char`, charContent, charPos, charDepth, charRole);
     }
@@ -5377,7 +5467,21 @@ jQuery(async () => {
         niSetProgressAnchor(0, '', { resetNode: true });
     });
     // 「预览」按钮：在折叠条里，点它只开预览，不触发上面的展开/收起
-    $app.on('click', '#ni-inj-preview-open', (ev) => {
+    $app.on('click', '.ni-char-app-btn', (ev) => {
+    ev?.stopPropagation?.();
+    niOpenCharAppearances(ev.currentTarget?.dataset?.charIdx);
+});
+$app.on('click', '#ni-char-app-close', () => niCloseCharAppearances());
+$app.on('click', '#ni-char-app-modal', (ev) => {
+    if (ev?.target?.id === 'ni-char-app-modal') niCloseCharAppearances();
+});
+$app.on('click', '[data-app-stage]', (ev) => {
+    const stageIdx = Math.trunc(Number(ev.currentTarget?.dataset?.appStage)) || 0;
+    if (stageIdx <= 0) return;
+    niCloseCharAppearances();
+    try { window.niJumpToStage?.(stageIdx); } catch (e) { /* 定位失败不影响查看 */ }
+});
+$app.on('click', '#ni-inj-preview-open', (ev) => {
         ev?.stopPropagation?.();
         niOpenInjectionPreview();
     });

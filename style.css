@@ -5013,3 +5013,74 @@ mark.ni-hl {
     color: var(--color-text-tertiary);
     white-space: nowrap;
 }
+
+/* ===== 角色原著设定：退场 / 按阶段关系 / 知情 / 出场索引 ===== */
+.ni-char-exit-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 0 5px; border-radius: 4px;
+    background: color-mix(in srgb, var(--ni-warning, #b7791f) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ni-warning, #b7791f) 34%, transparent);
+    color: var(--ni-warning, #b7791f);
+    font-size: 10px; line-height: 16px; white-space: nowrap;
+}
+.ni-char-exit-badge i { font-size: 11px; }
+
+.ni-char-app-btn {
+    display: inline-flex; align-items: center; gap: 3px;
+    margin-top: 3px; padding: 0 6px; height: 18px;
+    border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0, 0, 0, .12));
+    background: transparent;
+    color: var(--SmartThemeBodyColor, #444);
+    font-size: 10.5px; opacity: .78;
+}
+.ni-char-app-btn:hover { opacity: 1; border-color: var(--ni-primary, #A0445E); color: var(--ni-primary, #A0445E); }
+
+.ni-canon-rows { display: flex; flex-direction: column; gap: 4px; }
+.ni-canon-row {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px; border-radius: 6px;
+    background: var(--color-background-secondary, #f7f4f5);
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0, 0, 0, .08));
+}
+.ni-canon-row .ni-cef-input { margin: 0; min-width: 0; }
+.ni-canon-row .ni-canon-who { flex: 0 0 92px; }
+.ni-canon-row .ni-canon-type { flex: 1 1 auto; }
+.ni-canon-row .ni-canon-fact { flex: 1 1 auto; }
+.ni-canon-row .ni-canon-num { flex: 0 0 46px; text-align: center; }
+.ni-canon-del {
+    flex: 0 0 auto; width: 22px; height: 22px;
+    border-radius: 4px; cursor: pointer; line-height: 1;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0, 0, 0, .12));
+    background: transparent; color: #999;
+}
+.ni-canon-del:hover { color: #c0392b; border-color: #c0392b; }
+.ni-canon-add {
+    align-self: flex-start; white-space: nowrap;
+    margin-top: 4px; padding: 0 8px; height: 22px;
+    border-radius: 4px; cursor: pointer;
+    border: 1px dashed var(--SmartThemeBorderColor, rgba(0, 0, 0, .18));
+    background: transparent; color: var(--SmartThemeBodyColor, #555);
+    font-size: 11px;
+}
+.ni-canon-add:hover { border-color: var(--ni-primary, #A0445E); color: var(--ni-primary, #A0445E); }
+
+.ni-char-app-card { max-width: 620px; }
+.ni-char-app-sum { font-size: 11.5px; opacity: .75; margin: 2px 0 8px; }
+.ni-char-app-list { max-height: 58vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.ni-char-app-empty { padding: 16px 8px; text-align: center; font-size: 12px; opacity: .65; line-height: 1.7; }
+.ni-char-app-item {
+    padding: 6px 8px; border-radius: 6px;
+    background: var(--color-background-secondary, #f7f4f5);
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0, 0, 0, .08));
+}
+.ni-char-app-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.ni-char-app-stage {
+    padding: 0 6px; height: 18px; border-radius: 4px; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--ni-primary, #A0445E) 30%, transparent);
+    background: color-mix(in srgb, var(--ni-primary, #A0445E) 10%, transparent);
+    color: var(--ni-primary, #A0445E); font-size: 10.5px;
+}
+.ni-char-app-node { font-weight: 600; }
+.ni-char-app-hits { margin-left: auto; font-size: 10.5px; opacity: .6; }
+.ni-char-app-snippet { margin-top: 3px; font-size: 11.5px; opacity: .8; line-height: 1.6; }
