@@ -245,8 +245,10 @@ import {
     NI_THEME_DEFAULT,
     createThemeEditor,
     niApplyStatusbarTheme,
+    niBuildStageBatchPage,
     niFormatStageInjSummary,
     niFormatStageSpan,
+    niStageBatchSelectionMap,
     niResolveProgressAnchorStage,
     niResolveStageInjectionUiState,
     niSummarizeInjectionSections,
@@ -1942,6 +1944,7 @@ const {
     niApplyStageBlockAction,
     niRefreshStageBlockToolbar,
     niSetAllStagesEnabled,
+    niSetStagesState,
     niToggleStage,
     niSetStagePageSize,
     niSetStagePage,
@@ -3587,6 +3590,131 @@ function niJumpFromTimeline(stageIdx) {
     if (idx <= 0) return;
     niApplyStageView('list');
     window.niJumpToStage?.(idx);
+}
+// ── 阶段批量勾选：一次列出全部阶段，勾完一次应用（分页 20/30） ──────────
+const NI_STAGE_BATCH_PAGE_SIZES = [20, 30];
+let _niStageBatchSel = new Set();
+let _niStageBatchPage = 1;
+let _niStageBatchSize = 20;
+
+function niStageBatchAllIds() {
+    const n = Math.max(0, Math.trunc(Number(S.stageMapN) || 0));
+    const ids = [];
+    for (let i = 1; i <= n; i++) ids.push(i);
+    return ids;
+}
+
+function niStageBatchPageIds(ids) {
+    const info = niBuildStageBatchPage({
+        total: ids.length,
+        page: _niStageBatchPage,
+        pageSize: _niStageBatchSize,
+    });
+    _niStageBatchPage = info.page;
+    _niStageBatchSize = info.pageSize;
+    return { info, pageIds: ids.slice(info.start - 1, info.end) };
+}
+
+function niStageBatchStageMeta(idx) {
+    const nodes = getNodesForStage(idx) || {};
+    const count = (nodes.main || []).length + (nodes.sub || []).length + (nodes.pivot || []).length;
+    const vec = S.stageVecDone?.[idx] ? '已向量' : '未向量';
+    const title = String(S.stageTitles?.[idx] || '').trim() || `阶段 ${idx}`;
+    return { count, vec, title };
+}
+
+function niRenderStageBatchList() {
+    const list = q('#ni-stage-batch-list');
+    if (!list) return;
+    const ids = niStageBatchAllIds();
+    const { info, pageIds } = niStageBatchPageIds(ids);
+    list.innerHTML = pageIds.map((idx) => {
+        const { count, vec, title } = niStageBatchStageMeta(idx);
+        const on = _niStageBatchSel.has(idx);
+        return `<label class="ni-stage-batch-row${on ? ' on' : ''}" data-batch-stage="${idx}">
+            <input type="checkbox" data-batch-check="${idx}"${on ? ' checked' : ''}>
+            <span class="ni-stage-batch-num">第 ${idx} 阶段</span>
+            <span class="ni-stage-batch-title">${niEscHtml(title)}</span>
+            <span class="ni-stage-batch-meta">${count} 节点 · ${vec}</span>
+        </label>`;
+    }).join('') || '<div class="ni-empty">还没有阶段，先在处理页完成清洗与拆分</div>';
+
+    const pageno = q('#ni-stage-batch-pageno');
+    if (pageno) pageno.textContent = `第 ${info.page} / ${info.pageCount} 页（共 ${ids.length} 个阶段）`;
+    const prev = q('#ni-stage-batch-prev');
+    const next = q('#ni-stage-batch-next');
+    if (prev) prev.disabled = info.page <= 1;
+    if (next) next.disabled = info.page >= info.pageCount;
+
+    const onPage = pageIds.filter(idx => _niStageBatchSel.has(idx)).length;
+    const countEl = q('#ni-stage-batch-count');
+    if (countEl) countEl.textContent = `已选 ${_niStageBatchSel.size} / ${ids.length}（本页 ${onPage}/${pageIds.length}）`;
+    const allPage = q('#ni-stage-batch-all-page');
+    const nonePage = q('#ni-stage-batch-none-page');
+    if (allPage) allPage.disabled = pageIds.length === 0 || onPage === pageIds.length;
+    if (nonePage) nonePage.disabled = onPage === 0;
+}
+
+function niOpenStageBatchModal() {
+    const ids = niStageBatchAllIds();
+    if (!ids.length) {
+        toastr.info('还没有阶段，先在处理页完成清洗与拆分');
+        return;
+    }
+    // 初始选中状态 = 当前已开启的阶段，取消勾选即「关闭」，等同于批量编辑。
+    _niStageBatchSel = new Set(ids.filter(idx => S.stageStates?.[idx] !== false));
+    _niStageBatchPage = 1;
+    const sizeSel = q('#ni-stage-batch-size');
+    if (sizeSel) {
+        if (!NI_STAGE_BATCH_PAGE_SIZES.includes(_niStageBatchSize)) _niStageBatchSize = 20;
+        sizeSel.value = String(_niStageBatchSize);
+    }
+    niRenderStageBatchList();
+    const modal = q('#ni-stage-batch-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function niCloseStageBatchModal() {
+    const modal = q('#ni-stage-batch-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function niStageBatchSetPage(nextPage) {
+    _niStageBatchPage = Math.max(1, Math.trunc(Number(nextPage) || 1));
+    niRenderStageBatchList();
+}
+
+function niStageBatchToggle(idx, on) {
+    const i = Math.trunc(Number(idx)) || 0;
+    if (i <= 0) return;
+    if (on) _niStageBatchSel.add(i);
+    else _niStageBatchSel.delete(i);
+    niRenderStageBatchList();
+}
+
+function niStageBatchApplyPage(on) {
+    const ids = niStageBatchAllIds();
+    const { pageIds } = niStageBatchPageIds(ids);
+    for (const idx of pageIds) {
+        if (on) _niStageBatchSel.add(idx);
+        else _niStageBatchSel.delete(idx);
+    }
+    niRenderStageBatchList();
+}
+
+function niApplyStageBatch() {
+    const ids = niStageBatchAllIds();
+    if (!ids.length) { niCloseStageBatchModal(); return; }
+    const map = niStageBatchSelectionMap([..._niStageBatchSel], ids);
+    const changed = niSetStagesState(map);
+    niCloseStageBatchModal();
+    if (changed) {
+        toastr.success(`已更新 ${changed} 个阶段的启用状态`);
+        try { niRefreshInjStrategyUi(); } catch (e) { console.warn(e); }
+        try { niRenderTimeline(); } catch (e) { /* 时间线不是当前视图也没关系 */ }
+    } else {
+        toastr.info('阶段启用状态没有变化');
+    }
 }
 
 function niUpdateStageInjPanel(expanded = null) {
@@ -5267,6 +5395,32 @@ jQuery(async () => {
         if (stageIdx) niJumpFromTimeline(stageIdx);
     });
     $app.on('click', '#ni-inj-preview-recall', () => niRunInjectionPreviewRecall());
+
+    // ── 阶段批量勾选 ────────────────────────────────
+    $app.on('click', '#ni-stage-batch-open', (ev) => {
+        ev?.stopPropagation?.();
+        niOpenStageBatchModal();
+    });
+    $app.on('click', '#ni-stage-batch-cancel', () => niCloseStageBatchModal());
+    $app.on('click', '#ni-stage-batch-modal', (ev) => {
+        if (ev?.target?.id === 'ni-stage-batch-modal') niCloseStageBatchModal();
+    });
+    $app.on('click', '#ni-stage-batch-apply', () => niApplyStageBatch());
+    $app.on('click', '#ni-stage-batch-prev', () => niStageBatchSetPage(_niStageBatchPage - 1));
+    $app.on('click', '#ni-stage-batch-next', () => niStageBatchSetPage(_niStageBatchPage + 1));
+    $app.on('click', '#ni-stage-batch-all-page', () => niStageBatchApplyPage(true));
+    $app.on('click', '#ni-stage-batch-none-page', () => niStageBatchApplyPage(false));
+    $app.on('change', '#ni-stage-batch-size', (ev) => {
+        const size = Math.trunc(Number(ev?.target?.value)) || 20;
+        _niStageBatchSize = NI_STAGE_BATCH_PAGE_SIZES.includes(size) ? size : 20;
+        _niStageBatchPage = 1;
+        niRenderStageBatchList();
+    });
+    $app.on('change', '#ni-stage-batch-list', (ev) => {
+        const box = ev?.target;
+        if (!box || !box.matches?.('[data-batch-check]')) return;
+        niStageBatchToggle(box.dataset.batchCheck, box.checked === true);
+    });
     $app.on('click', '#ni-inj-preview-modal', (ev) => {
         // 点背景（而不是弹窗本体）时关闭
         if (ev?.target?.id === 'ni-inj-preview-modal') niCloseInjectionPreview();

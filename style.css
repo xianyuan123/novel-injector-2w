@@ -4729,3 +4729,102 @@ select.ni-modal-input {
   font-size: 12px;
   color: var(--ni-text-faint, #a8919a);
 }
+
+/* ── 阶段批量勾选弹窗 ─────────────────────────────── */
+.ni-stage-batch-card {
+  max-width: 720px;
+  width: min(720px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ni-stage-batch-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary, #666);
+}
+.ni-stage-batch-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ni-stage-batch-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+}
+.ni-stage-batch-size select {
+  border-radius: 6px;
+  border: 1px solid var(--ni-border, rgba(0, 0, 0, .12));
+  background: var(--color-background-primary, #fff);
+  color: var(--color-text-primary, #222);
+  font-size: 12px;
+  padding: 3px 6px;
+}
+.ni-stage-batch-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+}
+.ni-stage-batch-list {
+  max-height: 52vh;
+  overflow-y: auto;
+  border: 1px solid var(--ni-border, rgba(0, 0, 0, .1));
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ni-stage-batch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+.ni-stage-batch-row:hover { background: var(--ni-primary-alpha-30, rgba(160, 68, 94, .06)); }
+.ni-stage-batch-row.on {
+  border-color: var(--ni-primary-border, rgba(160, 68, 94, .3));
+  background: var(--ni-primary-alpha-30, rgba(160, 68, 94, .06));
+}
+.ni-stage-batch-row input[type="checkbox"] { margin: 0; flex: none; }
+.ni-stage-batch-num {
+  flex: none;
+  font-size: 11px;
+  color: var(--color-text-secondary, #888);
+  min-width: 60px;
+}
+.ni-stage-batch-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary, #222);
+}
+.ni-stage-batch-meta {
+  flex: none;
+  font-size: 11px;
+  color: var(--color-text-secondary, #888);
+}
+.ni-stage-batch-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.ni-stage-batch-pageno {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+}
+
+.ni-stage-batch-tools .ni-bulk-btn { padding: 4px 9px; font-size: 12px; }
+.ni-stage-batch-tools .ni-bulk-btn:disabled { opacity: .45; cursor: default; }
+.ni-stage-batch-pager .ni-page-btn:disabled { opacity: .4; cursor: default; }
