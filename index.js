@@ -7051,7 +7051,7 @@ jQuery(document).ready(function () {
         return lines.join('\n');
     }
 
-    async function niTbMaybeAutoAdvance() {
+    async function niTbMaybeAutoAdvance({ force = false } = {}) {
         if (_niAutoAdvanceBusy) return { skipped: 'busy' };
         _niAutoAdvanceBusy = true;
         try {
@@ -7065,7 +7065,8 @@ jQuery(document).ready(function () {
             const cfg = extension_settings[EXT_NAME] || {};
             const every = Math.max(1, Math.min(10, Number(cfg.tbAutoAdvanceEvery) || 1));
             _niAutoAdvanceEligibleTicks++;
-            if (every > 1 && (_niAutoAdvanceEligibleTicks % every) !== 0) {
+            // force 是「点徽标手动判一次」，不该被「每 N 条才判」的节流挡掉。
+            if (!force && every > 1 && (_niAutoAdvanceEligibleTicks % every) !== 0) {
                 return { skipped: 'every', tick: _niAutoAdvanceEligibleTicks };
             }
 
@@ -7098,7 +7099,16 @@ jQuery(document).ready(function () {
             const verdict = niParseAdvanceJudgeReply(raw);
             const advance = niDecideAutoAdvance(verdict, Number(cfg.tbAutoAdvanceThreshold));
             console.debug?.('[NI] 自动推进判定', { ms: Date.now() - startedAt, verdict, advance });
-            if (!advance) return { advance: false, verdict };
+            if (!advance) {
+                // 以前这里直接 return，什么都不说：用户只能看到「没反应」。
+                // 现在把原因算出来，手动判定时直接弹出来，自动判定时记进运行记录。
+                const confidence = Number.isFinite(verdict?.confidence) ? verdict.confidence.toFixed(2) : '?';
+                const why = verdict?.ok
+                    ? `模型判定「还没演完」（置信度 ${confidence}${verdict.reason ? `：${verdict.reason}` : ''}）`
+                    : `判定结果无法解析（${verdict?.reason || '未知原因'}）`;
+                niLogIssue('自动推进', why);
+                return { advance: false, verdict, why };
+            }
 
             const result = await window.niTbAdvanceOneNode?.(ctx.curNode);
             // 节点真的动了：按「节点有动向才推演」的节奏补一次后台推演（不阻塞推进，也不弹错）。
@@ -7110,6 +7120,46 @@ jQuery(document).ready(function () {
             _niAutoAdvanceBusy = false;
         }
     }
+
+    // 点状态栏「自动」徽标 → 立刻判定一次，并把结论说给用户听。
+    window.niTbForceJudge = async () => {
+        const ctx = window.niTbGetAutoAdvanceContext?.();
+        if (!ctx) {
+            toastr?.info?.('先打开「穿书模式」，自动推进才有可判定的节点');
+            return;
+        }
+        if (ctx.paused) {
+            toastr?.info?.('穿书推进已暂停，点状态栏「继续」后再判定');
+            return;
+        }
+        if (!ctx.curNode) {
+            toastr?.warning?.('当前没有找到可判定的节点');
+            return;
+        }
+        if (ctx.curNode.done) {
+            toastr?.info?.(`当前节点「${ctx.curNode.title || '未命名'}」已经完成，点「完成并继续」推进到下一个`);
+            return;
+        }
+        const tick = toastr?.info?.('正在判定当前节点是否演完…', '自动推进', { timeOut: 2000 });
+        try {
+            const r = await niTbMaybeAutoAdvance({ force: true });
+            if (r?.skipped) {
+                toastr?.warning?.(`没判定：${r.skipped}`, '自动推进');
+            } else if (r?.error) {
+                // 具体的请求错误已经记进运行记录，这里只提示去哪看。
+                toastr?.error?.('判定请求失败，右上角红点里有原因', '自动推进');
+            } else if (r?.advance) {
+                // 推进本身会 toast，这里不重复。
+            } else if (r?.why) {
+                toastr?.info?.(r.why, '自动推进');
+            }
+        } catch (e) {
+            console.warn('[NI] 手动判定失败:', e);
+            toastr?.error?.(e?.message || '判定失败', '自动推进');
+        } finally {
+            if (tick && typeof toastr?.clear === 'function') toastr.clear(tick);
+        }
+    };
 
     const onRendered = (messageId) => {
         if (!extension_settings[EXT_NAME]?.transBookMode) return;
@@ -7141,6 +7191,8 @@ jQuery(document).ready(function () {
 
     // 切换对话：重置状态，重新加载
     eventSource.on(event_types.CHAT_CHANGED, () => {
+        // 换对话后「每 N 条判一次」的计数要从零开始，否则可能正好卡在余数上不判。
+        _niAutoAdvanceEligibleTicks = 0;
         document.getElementById('ni-storybar')?.remove();
         niTbResetPromptRuntimeState();
         niTbLoadState();
