@@ -5092,3 +5092,18 @@ mark.ni-hl {
     color: var(--SmartThemeQuoteColor, #8a6a72);
 }
 .ni-char-alias-row .ti { font-size: 11px; opacity: .8; }
+
+/* 多身份：卡片上的身份行 + 编辑区的身份表格 */
+.ni-char-id-row {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 3px; font-size: 11px; line-height: 1.4;
+    color: var(--SmartThemeQuoteColor, #8a6a72);
+}
+.ni-char-id-row .ti { font-size: 11px; opacity: .8; }
+.ni-canon-row-id .ni-canon-who { flex: 1 1 110px; }
+.ni-ci-secret {
+    display: flex; align-items: center; gap: 3px;
+    font-size: 11px; white-space: nowrap; cursor: pointer;
+    color: var(--SmartThemeBodyColor, #444);
+}
+.ni-ci-secret input { margin: 0; }

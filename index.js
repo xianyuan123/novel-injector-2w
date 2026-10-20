@@ -163,6 +163,7 @@ import {
     niFindCharAppearances,
     niCollectCharNames,
     niFormatAliasHint,
+    niFormatIdentitiesForStage,
     niSummarizeAppearances,
     niFormatAppearanceSummary,
 } from './lib/char-canon.js';
@@ -4725,6 +4726,9 @@ function niBuildCharInjectionText(plan = null) {
             // A：别名/称呼表——原著里同一个人常有本名/道号/绰号，模型只认一个名字会漏
             const aliasText = niFormatAliasHint(c.aliases);
             if (aliasText) lines.push(`别名：${aliasText}（正文或对话里可能这样称呼）`);
+            // 多身份：秘密身份在揭晓前只写「另一形态」，不点破与本名的关系
+            const identityText = niFormatIdentitiesForStage(c.identities, canonStageIdx, c.name);
+            if (identityText) lines.push(identityText);
             const knowText = niFormatKnowledgeForStage(c.knowledge, canonStageIdx);
             if (knowText) lines.push(`知情：${knowText}`);
             if (lines.length > 1) charLines.push(lines.join('\n'));
