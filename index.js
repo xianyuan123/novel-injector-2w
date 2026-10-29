@@ -3349,13 +3349,14 @@ function niUpdateFuturePlotUI(precomputedPlan = null) {
         blockedStageIdxs: plan.blockedRecallStageIdxs,
         includeCurrentStage: includeCurrentApplied,
     });
+    // 「每阶段 N 个」只约束往后的阶段；当前阶段剩下的节点是全部下发，所以单独给文案。
     const nodeLabel = nodesPerStage === 0 ? '全部节点' : `前 ${nodesPerStage} 个节点`;
     const withCurrent = includeCurrentApplied && stageIndices[0] === Math.trunc(Number(anchor));
     const futureOnly = withCurrent ? stageIndices.slice(1) : stageIndices;
     let className = 'ni-stage-future-note';
     let text;
     if (!enabled) {
-        text = `开启后：${includeCurrent ? '当前阶段剩下的节点 + ' : ''}往后 ${stageCount} 个阶段、每阶段${nodeLabel}会提前注入（带「尚未演到、只作走向参考」的声明）。`;
+        text = `开启后：${includeCurrent ? '当前阶段剩下的全部节点 + ' : ''}往后 ${stageCount} 个阶段、每阶段${nodeLabel}会提前注入（带「尚未演到、只作走向参考」的声明）。`;
     } else if (!Number.isFinite(Number(anchor)) || Number(anchor) <= 0) {
         className += ' ni-idle';
         text = '已开启，但还没法确定当前是第几阶段（需要有开启的阶段，或穿书模式的当前节点），暂时不注入。';
@@ -3369,7 +3370,7 @@ function niUpdateFuturePlotUI(precomputedPlan = null) {
         className += ' ni-active';
         const parts = [];
         if (withCurrent) {
-            parts.push(`第 ${anchor} 阶段剩下的${nodeLabel}`);
+            parts.push(`第 ${anchor} 阶段剩下的全部节点（优先）`);
         }
         if (futureOnly.length) {
             parts.push(`第 ${futureOnly.join('、')} 阶段（每阶段${nodeLabel}）`);
@@ -4241,6 +4242,9 @@ function niBuildFuturePlotInjectionPayload(plan, cfg = extension_settings[EXT_NA
         nodesByStage: runtimeIndex.nodesByStage,
         chunkIdxsByStage: runtimeIndex.chunkIdxsByStage,
         nodesPerStage: cfg.futurePlotNodes,
+        // 当前阶段优先：本阶段剩下的节点全部放进预告，「每阶段 N 个」只约束后面的阶段。
+        // 否则本阶段还剩 8 个节点、N 设成 4 时只发 4 个就轮到下一阶段了。
+        currentStageNodesPerStage: 0,
         rawMode: niNormalizeRawInjMode(cfg.rawInjMode),
         maxTokens: niNormalizeRawInjectionMaxTokens(
             cfg.plotInjMaxTokens,
