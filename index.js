@@ -696,6 +696,8 @@ function niLoadSettings() {
     if (saved._novelKey) S.novelKey = saved._novelKey;
     if (saved._heavyFileKey) S.heavyFileKey = saved._heavyFileKey;
     if (saved._fileFingerprint) S.fileFingerprint = saved._fileFingerprint;
+    if (Array.isArray(saved._appendFingerprints)) S.appendFingerprints = saved._appendFingerprints.slice();
+    if (Array.isArray(saved._appendSources)) S.appendSources = saved._appendSources.slice();
     if (saved._chunkKbUsed != null) S.chunkKbUsed = Number(saved._chunkKbUsed) || 0;
     if (saved._vecDone) S.vecDone = saved._vecDone;
     if (saved._stageVecDone) {
@@ -925,6 +927,8 @@ function niSaveSettings({ scheduleAutosave = true } = {}) {
     cfg._novelKey      = nextNovelKey;
     cfg._heavyFileKey  = S.heavyFileKey;
     cfg._fileFingerprint = S.fileFingerprint;
+    cfg._appendFingerprints = S.appendFingerprints || [];
+    cfg._appendSources = S.appendSources || [];
     cfg._chunkKbUsed   = S.chunkKbUsed;
     cfg._vecDone       = S.vecDone;
     cfg._stageVecDone  = S.stageVecDone;
@@ -1744,6 +1748,15 @@ function niRenderVectorCompatibilityHint() {
     hintEl.title = presentation.title || presentation.text;
     hintEl.classList.toggle('ni-vec-hint-warning', presentation.level === 'warning');
 
+    // 换了模型/端点后，库里还是旧模型算的向量：黄色提示旁边给一个一键重建入口。
+    // 只在「确实有已存向量」且「当前不在向量化中」时出现，平时不占地方。
+    const rebuildEl = q('#ni-btn-vec-rebuild');
+    if (rebuildEl) {
+        const hasStored = (niStoredVectorDiagnosticRows || []).length > 0;
+        const showRebuild = presentation.level === 'warning' && hasStored && !S._vecRunning;
+        rebuildEl.style.display = showRebuild ? '' : 'none';
+    }
+
     // 异常提示优先于已结束的进度文字；正在向量化时仍保留实时进度。
     if (presentation.level === 'warning' && !S._vecRunning) {
         const titleProgress = q('#ni-vp-title-prog');
@@ -2144,6 +2157,8 @@ const {
     niOnDrop,
     niOnFile,
     niApplyFile,
+    niAppendFile,
+    niOnAppendFile,
     getCfgKb,
     niOnKbChange,
     renderChunkList,
@@ -5380,6 +5395,9 @@ jQuery(async () => {
 
     // 上传区点击 / 拖拽
     $app.on('click', '#ni-uz', () => document.getElementById('ni-fi').click());
+    // 追加章节：接在当前小说后面，不重置工作区
+    $app.on('click', '#ni-btn-append', () => document.getElementById('ni-fi-append')?.click());
+    $app.on('change', '#ni-fi-append', function() { niOnAppendFile(this); });
     // 上传区接管拖拽，避免冒泡到酒馆 body 上的角色卡导入器。
     $app.on('dragover', '#ni-uz', e => {
         e.preventDefault();
@@ -5724,6 +5742,23 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     $app.on('click', '#ni-vec-cfg-btn', () => niTogglePanel('ni-vec-api', 'ni-vec-cfg-btn'));
     $app.on('click', '#ni-vec-stage-btn', () => niToggleStagePanel());  // 选择阶段 → 展开/收起面板
     $app.on('click', '#ni-btn-vec', () => niStartVec());             // 开始向量化 → 直接用当前勾选
+    // 换模型/端点后一键重建：只清向量（剧情、角色、清洗结果都不动），清完立刻用当前设置重跑
+    $app.on('click', '#ni-btn-vec-rebuild', async () => {
+        if (!S.novelKey) return;
+        const ok = typeof confirm === 'function'
+            ? confirm('用当前模型重建整本索引？\n\n只会清掉已算好的向量，剧情、角色、清洗结果都不动。\n向量多的话会重新消耗一次 API 费用。')
+            : true;
+        if (!ok) return;
+        const cleared = await niClearVecCache({ quiet: true });
+        if (!cleared) { toastr?.error?.('清除旧向量失败，已取消重建'); return; }
+        // 本地诊断缓存跟着清空，让提示行立刻恢复正常，而不是等下一次查询
+        niStoredVectorDiagnosticRows = [];
+        niStoredVectorCompatibility = null;
+        niVectorDiagnosticNovelKey = '';
+        niRenderVectorCompatibilityHint();
+        toastr?.info?.('已清空旧向量，开始用当前模型重建…');
+        await niStartVec();
+    });
     $app.on('click', '#ni-btn-vec-stop', () => niRequestVecStop());   // 停止向量化：改成「补全缺失」续跑
     $app.on('click', '#ni-btn-vec-fill', () => niVecFillMissing());    // 补全缺失向量块
 

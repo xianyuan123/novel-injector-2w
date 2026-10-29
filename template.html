@@ -23,6 +23,10 @@
             <div class="ni-u-hint" id="ni-u-hint">支持 .txt / .mobi，将按设定大小自动分段</div>
           </div>
           <div class="ni-u-ok" id="ni-u-ok"><i class="ti ti-circle-check"></i><span id="ni-u-fname"></span></div>
+          <div class="ni-upload-actions">
+            <button class="ni-btn ni-btn-inline" id="ni-btn-append" title="这是同一本小说的后续章节：接在当前小说后面，已有分段、清洗结果、剧情和角色都保留，只新增分段"><i class="ti ti-file-plus"></i>追加章节</button>
+            <input type="file" id="ni-fi-append" style="display:none" accept=".txt,.mobi">
+          </div>
           <input type="file" id="ni-fi" style="display:none" accept=".txt,.mobi">
           <div id="ni-chunk-info" style="display:none">
             <div class="ni-stat-row">
@@ -211,6 +215,7 @@
         <div class="ni-ctitle">
           <span class="ni-ctitle-label"><i class="ti ti-vector"></i>向量化</span>
           <span class="ni-vec-hint-inline" id="ni-vec-hint-inline" aria-live="polite"><i class="ti ti-info-circle" id="ni-vec-hint-icon"></i><span id="ni-vec-hint-text">各阶段独立索引，阶段页开关控制检索。</span></span>
+          <button class="ni-btn ni-btn-inline ni-vec-rebuild-btn" id="ni-btn-vec-rebuild" style="display:none" title="向量的来源与当前设置不一致（换了模型或端点）。点这里只清掉向量，马上用当前模型重跑整本索引"><i class="ti ti-refresh-dot"></i>重建索引</button>
           <div class="ni-ctitle-prog" id="ni-vp-title-prog" style="display:none">
             <span class="ni-title-note" id="ni-vp-title-note"></span>
             <div class="ni-ctitle-prog-track">

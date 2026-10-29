@@ -5254,3 +5254,20 @@ mark.ni-hl {
     color: var(--SmartThemeBodyColor, #444);
 }
 .ni-ci-secret input { margin: 0; }
+
+/* ---- 上传区的「追加章节」入口：接在已有小说后面，不重置工作区 ---- */
+.ni-upload-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+}
+.ni-upload-actions .ni-btn-inline {
+    font-size: 12px;
+}
+/* 向量来源与当前设置不一致时，标题行右侧出现的「重建索引」 */
+.ni-vec-rebuild-btn {
+    flex-shrink: 0;
+    margin-left: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+}
