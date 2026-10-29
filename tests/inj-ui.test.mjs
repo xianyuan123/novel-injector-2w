@@ -325,14 +325,14 @@ check('每组都有标题与说明', () => {
     const heads = tpl.match(/class="ni-inj-head"/g) || [];
     const titles = tpl.match(/class="ni-inj-title"/g) || [];
     const subs = tpl.match(/class="ni-inj-sub"/g) || [];
-    if (heads.length !== 5 || titles.length !== 5 || subs.length !== 5) {
+    if (heads.length !== 6 || titles.length !== 6 || subs.length !== 6) {
         throw new Error(`head/title/sub 数量 ${heads.length}/${titles.length}/${subs.length}`);
     }
     return true;
 });
-check('分组顺序：阶段启用 → 注入范围 → 提前预告 → 召回屏蔽 → 进度锚点', () => {
+check('分组顺序：阶段启用 → 注入范围 → 提前预告 → 召回屏蔽 → 预算沙盘 → 进度锚点', () => {
     const seq = [...tpl.matchAll(/class="ni-inj-title">([^<]+)</g)].map(m => m[1]);
-    const want = ['阶段启用', '注入范围', '提前预告', '召回屏蔽', '进度锚点'];
+    const want = ['阶段启用', '注入范围', '提前预告', '召回屏蔽', '预算沙盘', '进度锚点'];
     if (seq.join('|') !== want.join('|')) throw new Error('实际顺序：' + seq.join('|'));
     return true;
 });

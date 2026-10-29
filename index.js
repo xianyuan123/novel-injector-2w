@@ -167,6 +167,8 @@ import {
     niSummarizeAppearances,
     niFormatAppearanceSummary,
 } from './lib/char-canon.js';
+import { niCollectHealthChecks, niRenderHealthReport } from './lib/health-system.js';
+import { niBuildKnowledgeMatrix, niRenderKnowledgeMatrix } from './lib/knowledge-matrix.js';
 
 import {
     buildRechunkLayout,
@@ -3879,7 +3881,40 @@ function niBuildInjectionPreviewSections(precomputedPlan = null) {
     return sections;
 }
 
-function niRenderInjectionPreview({ recallText = null, recallError = '', busy = false } = {}) {
+function niRenderRecallTrace(trace) {
+    if (!trace || !Array.isArray(trace.rows)) return '';
+    const st = trace.stats || {};
+    const fmt = value => (Number(value) || 0).toFixed(3);
+    const rows = trace.rows.map(row => {
+        const verdict = row.kept
+            ? '<span class="ni-trace-ok">已注入</span>'
+            : '<span class="ni-trace-drop">超预算丢弃</span>';
+        const hits = Array.isArray(row.hits) && row.hits.length
+            ? `命中「${row.hits.join('、')}」+${fmt(row.keywordBonus)}`
+            : '无关键词命中';
+        return `<li class="${row.kept ? 'kept' : 'dropped'}">`
+            + `<span class="ni-trace-stage">第 ${Number(row.stageIdx) || '?'} 阶段</span>`
+            + `<span class="ni-trace-score" title="语义相似度 ${fmt(row.semanticScore)} ＋ 关键词加分 ${fmt(row.keywordBonus)}">${fmt(row.score)}</span>`
+            + `<span class="ni-trace-hits">${niEscHtml(hits)}</span>`
+            + verdict
+            + '</li>';
+    }).join('');
+    const excludedStages = Array.isArray(st.excludedStages) ? st.excludedStages : [];
+    const notes = [
+        `阈值 ${fmt(trace.thresh)}`,
+        `候选 ${Number(st.candidateTotal) || 0} 块`,
+        `过线 ${Number(st.passedThreshold) || 0} 块`,
+        `注入 ${Number(st.recalled) || 0} 块`,
+        Number(st.budgetDropped) ? `超预算丢 ${Number(st.budgetDropped)} 块` : '',
+        excludedStages.length ? `屏蔽阶段 ${excludedStages.join('、')}` : '',
+        Number(st.excludedBlocks) ? `屏蔽块 ${Number(st.excludedBlocks)} 个` : '',
+        `预算 ${Number(trace.maxChars) || 0} 字`,
+    ].filter(Boolean).join(' · ');
+    return `<div class="ni-trace-head"><i class="ti ti-list-search"></i>召回溯源<span>${niEscHtml(notes)}</span></div>`
+        + (rows ? `<ul class="ni-trace-list">${rows}</ul>` : '<div class="ni-inj-preview-empty">这次一块都没召回（可能阶段都没向量化，或全部低于阈值）。</div>');
+}
+
+function niRenderInjectionPreview({ recallText = null, recallError = '', busy = false, recallTrace = null } = {}) {
     const sumEl = q('#ni-inj-preview-sum');
     const listEl = q('#ni-inj-preview-list');
     if (!listEl) return;
@@ -3922,6 +3957,12 @@ function niRenderInjectionPreview({ recallText = null, recallError = '', busy = 
     listEl.innerHTML = rows.length
         ? rows.join('')
         : '<div class="ni-inj-preview-empty">这一轮没有可注入的内容。</div>';
+    const traceEl = q('#ni-inj-trace');
+    if (traceEl) {
+        const html = niRenderRecallTrace(recallTrace);
+        traceEl.innerHTML = html;
+        traceEl.style.display = html ? '' : 'none';
+    }
     const recallBtn = q('#ni-inj-preview-recall');
     if (recallBtn) {
         recallBtn.disabled = busy;
@@ -3957,7 +3998,7 @@ function niCloseInjectionPreview() {
 
 async function niRunInjectionPreviewRecall() {
     const cfg = extension_settings[EXT_NAME] || {};
-    niRenderInjectionPreview({ busy: true });
+    niRenderInjectionPreview({ busy: true, recallTrace: null });
     try {
         const plan = niResolveStageInjectionExecutionPlan(cfg);
         const ctx = getContext?.();
@@ -3976,6 +4017,7 @@ async function niRunInjectionPreviewRecall() {
             niRenderInjectionPreview({ recallError: '没有可用的对话消息' });
             return;
         }
+        let recallTrace = null;
         const recallText = await recallRelevantWeighted(weightedQueries, plan.vectorRecallScope.currentStages, {
             lightRecallContext,
             nodeRecallContext,
@@ -3986,8 +4028,9 @@ async function niRunInjectionPreviewRecall() {
             keywordTerms,
             inferAnchorStage: !plan.curTbNode,
             excludeChunkIdxs: plan.blockedRecallChunkIdxs,
+            onTrace: trace => { recallTrace = trace; },
         });
-        niRenderInjectionPreview({ recallText: String(recallText || '') });
+        niRenderInjectionPreview({ recallText: String(recallText || ''), recallTrace });
     } catch (e) {
         console.warn('[NI] 预览召回失败:', e);
         niRenderInjectionPreview({ recallError: e?.message || '未知错误' });
@@ -5532,6 +5575,135 @@ $app.on('click', '[data-app-stage]', (ev) => {
     niCloseCharAppearances();
     try { window.niJumpToStage?.(stageIdx); } catch (e) { /* 定位失败不影响查看 */ }
 });
+// ── 预算沙盘：拖滑条看 token 缩到多少会先掉哪个阶段（纯本地计算，不发请求） ──
+let _niBudgetTimer = null;
+let _niBudgetInitDone = false;
+
+function niRenderBudgetSandbox(tokens) {
+    const out = q('#ni-budget-out');
+    if (!out) return;
+    const valEl = q('#ni-budget-val');
+    const t = Math.max(256, parseInt(tokens, 10) || 0);
+    if (valEl) valEl.textContent = String(t);
+    const cfg = extension_settings[EXT_NAME] || {};
+    try {
+        const budgetCfg = Object.assign({}, cfg, { plotInjMaxTokens: t });
+        const allNodes = getAllPlotsInStoryOrder(S);
+        const plan = niResolveStageInjectionExecutionPlan(budgetCfg, { allNodes });
+        const runtimeIndex = niBuildStageRuntimeIndex(S);
+        const payload = niBuildStageInjectionPayloadForPlan(plan, budgetCfg, { runtimeIndex });
+        const selected = Array.isArray(payload?.selected) ? payload.selected : [];
+        const charsPerToken = 1.5;
+        const byStage = new Map();
+        for (const item of selected) {
+            const stageIdx = Number(item?.stageIdx) || 0;
+            if (!stageIdx) continue;
+            const entry = byStage.get(stageIdx) || { stageIdx, chars: 0, kinds: [] };
+            entry.chars += String(item?.text || '').length;
+            const isSummary = item.kind === 'summary';
+            const truncated = String(item.kind || '').includes('truncated');
+            const label = truncated ? '细节·被截断' : (isSummary ? '概括' : '细节');
+            if (!entry.kinds.includes(label)) entry.kinds.push(label);
+            byStage.set(stageIdx, entry);
+        }
+        const rows = Array.from(byStage.values()).sort((a, b) => a.stageIdx - b.stageIdx);
+        const usedTokens = Math.ceil((payload?.usedChars || 0) / charsPerToken);
+        const pct = t > 0 ? Math.round((usedTokens / t) * 100) : 0;
+        const omitted = Array.isArray(payload?.omittedStages) ? payload.omittedStages : [];
+        const head = `<div class="ni-budget-sum">共 ${rows.length} 个阶段 · 约 ${usedTokens} token（预算 ${t}，占 ${pct}%）</div>`;
+        const body = rows.map(row => {
+            const tk = Math.ceil(row.chars / charsPerToken);
+            return `<div class="ni-budget-row-item"><span class="ni-budget-stage">第 ${row.stageIdx} 阶段</span><span class="ni-budget-kind">${niEscHtml(row.kinds.join(' + '))}</span><span class="ni-budget-tk">${tk} token</span></div>`;
+        }).join('');
+        const drop = omitted.length
+            ? `<div class="ni-budget-drop"><i class="ti ti-alert-triangle"></i>先掉的阶段：第 ${omitted.join('、')} 阶段</div>`
+            : (rows.length ? '<div class="ni-budget-ok"><i class="ti ti-check"></i>这个预算下都能装下</div>' : '');
+        out.innerHTML = head + (body || '<div class="ni-budget-empty">当前没有可直注的阶段</div>') + drop;
+    } catch (error) {
+        console.error('[NI] 预算沙盘计算失败:', error);
+        out.innerHTML = `<div class="ni-budget-empty">算不出来：${niEscHtml(String(error?.message || error))}</div>`;
+    }
+}
+
+function niInitBudgetSandbox() {
+    const range = q('#ni-budget-range');
+    if (!range) return;
+    const cfg = extension_settings[EXT_NAME] || {};
+    const current = Math.max(256, parseInt(cfg.plotInjMaxTokens, 10) || NI_RAW_INJECTION_MAX_TOKENS_DEFAULT);
+    const max = Math.max(current, NI_RAW_INJECTION_MAX_TOKENS_DEFAULT);
+    range.max = String(max);
+    if (!_niBudgetInitDone) {
+        range.value = String(current);
+        _niBudgetInitDone = true;
+    }
+    niRenderBudgetSandbox(parseInt(range.value, 10) || current);
+}
+
+$app.on('input', '#ni-budget-range', function () {
+    const tokens = parseInt(this.value, 10) || 0;
+    const valEl = q('#ni-budget-val');
+    if (valEl) valEl.textContent = String(tokens);
+    if (_niBudgetTimer) clearTimeout(_niBudgetTimer);
+    _niBudgetTimer = setTimeout(() => {
+        _niBudgetTimer = null;
+        niRenderBudgetSandbox(tokens);
+    }, 140);
+});
+$app.on('click', '.ni-stage-inj-bar', () => {
+    // 面板展开时补一次估算（滑条还没动过也得有结果）
+    setTimeout(() => {
+        const body = q('#ni-stage-inj-body');
+        if (!body || body.style.display === 'none' || !body.classList.contains('on')) return;
+        niInitBudgetSandbox();
+    }, 30);
+});
+
+// ── 角色 × 阶段知情矩阵：纯本地渲染 ──
+$app.on('click', '#ni-btn-knowledge', function () {
+    const modal = q('#ni-knowledge-modal');
+    const body = q('#ni-km-body');
+    if (!modal || !body) return;
+    try {
+        const cfg = extension_settings[EXT_NAME] || {};
+        const anchor = parseInt(cfg.progressStage, 10);
+        const currentStage = Number.isFinite(anchor) && anchor > 0 ? anchor : 0;
+        const matrix = niBuildKnowledgeMatrix(S, { currentStage });
+        body.innerHTML = niRenderKnowledgeMatrix(matrix);
+        modal.style.display = 'flex';
+    } catch (error) {
+        console.error('[NI] 生成知情矩阵失败:', error);
+        body.innerHTML = `<div class="ni-km-empty">生成失败：${String(error?.message || error)}</div>`;
+        modal.style.display = 'flex';
+    }
+});
+$app.on('click', '#ni-knowledge-close', () => {
+    const modal = q('#ni-knowledge-modal');
+    if (modal) modal.style.display = 'none';
+});
+
+// ── 数据体检：只在本地翻数据，不发请求 ──
+$app.on('click', '#ni-btn-health', function () {
+    const reportEl = q('#ni-health-report');
+    try {
+        const result = niCollectHealthChecks(S);
+        if (reportEl) {
+            reportEl.innerHTML = niRenderHealthReport(result);
+            reportEl.style.display = '';
+        }
+        const total = Number(result?.summary?.total) || 0;
+        if (typeof toastr !== 'undefined') {
+            if (total) toastr.warning(`体检查出 ${total} 项待处理，详情见下方列表`);
+            else toastr.success('体检通过，没查出问题');
+        }
+    } catch (error) {
+        console.error('[NI] 数据体检失败:', error);
+        if (reportEl) {
+            reportEl.innerHTML = `<div class="ni-health-ok">体检失败：${String(error?.message || error)}</div>`;
+            reportEl.style.display = '';
+        }
+    }
+});
+
 $app.on('click', '#ni-inj-preview-open', (ev) => {
         ev?.stopPropagation?.();
         niOpenInjectionPreview();
@@ -5861,6 +6033,25 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     $app.on('change', '#ni-vec-url, #ni-vec-model', () => {
         niSaveSettings();
         niRefreshCurrentVectorSourceHint().catch(e => console.warn('[NI] 刷新向量来源提示失败:', e));
+    });
+
+    // Esc 关闭「添加角色 / 剧情事件编辑」两个弹窗（走它们自己的取消按钮，保留清理逻辑）
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || e.defaultPrevented) return;
+        const pairs = [
+            ['#ni-add-char-modal', '#ni-add-char-cancel'],
+            ['#ni-plot-modal', '#ni-plot-modal-cancel'],
+        ];
+        for (const [modalSel, cancelSel] of pairs) {
+            const modal = document.querySelector(modalSel);
+            if (!modal || modal.style.display === 'none') continue;
+            const cancelBtn = document.querySelector(cancelSel);
+            if (cancelBtn) {
+                e.preventDefault();
+                cancelBtn.click();
+            }
+            return;
+        }
     });
 
     // 注入设置折叠

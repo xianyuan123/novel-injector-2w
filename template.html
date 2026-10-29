@@ -88,7 +88,7 @@
               <i class="ti ti-repeat"></i>
               <input type="checkbox" id="ni-clean-auto-resume" style="display:none">
               <span>自动续跑清洗</span>
-              <span id="ni-clean-auto-resume-pill" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">关</span>
+              <span id="ni-clean-auto-resume-pill" >关</span>
             </span>
           </div>
           <div class="ni-field">
@@ -96,7 +96,7 @@
               <label>API 端点</label>
               <span id="ni-stream-btn" title="启用后以流式（SSE）方式接收响应" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none;color:var(--color-text-secondary)">
                 <input type="checkbox" id="ni-clean-stream" style="display:none">
-                <span id="ni-stream-pill" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">关</span>
+                <span id="ni-stream-pill" >关</span>
                 流式输出
               </span>
             </div>
@@ -237,11 +237,11 @@
           </button>
         </div>
         <div class="ni-api-panel" id="ni-vec-stage-panel">
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <button class="ni-char-edit-btn" id="ni-vsp-all">全选</button>
-            <button class="ni-char-edit-btn" id="ni-vsp-none">全不选</button>
-            <button class="ni-char-edit-btn" id="ni-vsp-pending">仅未向量</button>
-            <button class="ni-char-edit-btn" id="ni-vsp-debug" title="查看IndexedDB实际数据">🔍诊断</button>
+          <div class="ni-vsp-tools">
+            <button class="ni-char-edit-btn" id="ni-vsp-all"><i class="ti ti-checks"></i>全选</button>
+            <button class="ni-char-edit-btn" id="ni-vsp-none"><i class="ti ti-square-off"></i>全不选</button>
+            <button class="ni-char-edit-btn" id="ni-vsp-pending"><i class="ti ti-hourglass-high"></i>仅未向量</button>
+            <button class="ni-char-edit-btn" id="ni-vsp-debug" title="查看 IndexedDB 实际数据"><i class="ti ti-stethoscope"></i>诊断</button>
           </div>
           <div id="ni-vec-stage-selector" class="ni-vec-stage-selector" style="max-height:240px;overflow-y:auto"></div>
         </div>
@@ -674,7 +674,7 @@
             <span class="ni-switch-wrap" style="display:inline-flex;align-items:center;gap:4px">
               <input type="checkbox" id="ni-tb-chk" style="position:absolute;opacity:0;width:0;height:0">
               <span class="ni-switch-track"><span class="ni-switch-knob"></span></span>
-              <span class="ni-switch-txt" id="ni-tb-state" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">关</span>
+              <span class="ni-switch-txt" id="ni-tb-state" >关</span>
             </span>
           </label>
           <button class="ni-icon-btn" id="ni-tb-cfg-btn" title="穿书设置" style="margin-left:auto"><i class="ti ti-settings"></i></button>
@@ -908,7 +908,7 @@
         </div>
         <!-- 剧情事件编辑 Modal-->
         <div class="ni-modal-bg" id="ni-plot-modal" style="display:none">
-          <div class="ni-modal" style="width:400px">
+          <div class="ni-modal" style="width:400px" role="dialog" aria-modal="true" aria-labelledby="ni-plot-modal-title">
             <div class="ni-modal-title" id="ni-plot-modal-title">添加事件</div>
             <label class="ni-modal-label">类型</label>
             <div style="display:flex;gap:6px;margin-bottom:6px">
@@ -991,7 +991,7 @@
               <span class="ni-switch-wrap">
                 <input type="checkbox" id="ni-user-sub-chk">
                 <span class="ni-switch-track"><span class="ni-switch-knob"></span></span>
-                <span class="ni-switch-txt" id="ni-user-sub-state" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">关</span>
+                <span class="ni-switch-txt" id="ni-user-sub-state" >关</span>
               </span>
             </label>
             <button class="ni-icon-btn" id="ni-user-sub-cfg-btn" title="用户代入设置"><i class="ti ti-settings"></i></button>
@@ -1099,6 +1099,7 @@
           <div class="ni-toolbar-row" id="ni-char-bulk-row">
             <button class="ni-bulk-btn on" id="ni-char-enable-all-simple" title="开启当前分类全部角色注入"><i class="ti ti-check"></i>全部开启</button>
             <button class="ni-bulk-btn off" id="ni-char-disable-all-simple" title="关闭当前分类全部角色注入"><i class="ti ti-x"></i>全部关闭</button>
+            <button class="ni-bulk-btn off" id="ni-btn-knowledge" title="谁在第几阶段知道什么：身份层与已知事实按阶段摊开，防止提前泄底"><i class="ti ti-matrix"></i>知情矩阵</button>
           </div>
         <div class="ni-char-search-row">
           <div class="ni-char-search">
@@ -1142,8 +1143,8 @@
 
     <!-- 添加角色弹窗-->
     <div class="ni-modal-bg" id="ni-add-char-modal" style="display:none">
-      <div class="ni-modal">
-        <div class="ni-modal-title">添加角色</div>
+      <div class="ni-modal" role="dialog" aria-modal="true" aria-labelledby="ni-add-char-title">
+        <div class="ni-modal-title" id="ni-add-char-title">添加角色</div>
         <div class="ni-cef-field">
           <label class="ni-cef-label"><i class="ti ti-user" aria-hidden="true"></i>姓名</label>
           <input type="text" class="ni-cef-ta" style="field-sizing:content;min-height:unset;padding:6px 8px" id="ni-new-char-name" placeholder="输入角色名">
@@ -1200,7 +1201,7 @@
               <span class="ni-switch-track">
                 <span class="ni-switch-knob"></span>
               </span>
-              <span class="ni-switch-txt" id="ni-plugin-state" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">开</span>
+              <span class="ni-switch-txt" id="ni-plugin-state" >开</span>
             </span>
             <span id="ni-plugin-disabled-hint" style="display:none;color:var(--color-text-secondary);font-size:11px;font-weight:500;letter-spacing:.06em;align-items:center;gap:3px"><i class="ti ti-alert-circle"></i> 停止注入</span>
           </label>
@@ -1317,7 +1318,7 @@
             <span class="ni-switch-wrap">
               <input type="checkbox" id="ni-theme-surface-follow" style="position:absolute;opacity:0;width:0;height:0">
               <span class="ni-switch-track"><span class="ni-switch-knob"></span></span>
-              <span class="ni-switch-txt" id="ni-theme-surface-state" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">开</span>
+              <span class="ni-switch-txt" id="ni-theme-surface-state" >开</span>
             </span>
           </label>
           <label class="ni-switch-row" id="ni-theme-borderless-row">
@@ -1325,7 +1326,7 @@
             <span class="ni-switch-wrap">
               <input type="checkbox" id="ni-theme-borderless" style="position:absolute;opacity:0;width:0;height:0">
               <span class="ni-switch-track"><span class="ni-switch-knob"></span></span>
-              <span class="ni-switch-txt" id="ni-theme-borderless-state" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">关</span>
+              <span class="ni-switch-txt" id="ni-theme-borderless-state" >关</span>
             </span>
           </label>
           <label class="ni-switch-row" id="ni-theme-cardless-row">
@@ -1333,7 +1334,7 @@
             <span class="ni-switch-wrap">
               <input type="checkbox" id="ni-theme-cardless" style="position:absolute;opacity:0;width:0;height:0">
               <span class="ni-switch-track"><span class="ni-switch-knob"></span></span>
-              <span class="ni-switch-txt" id="ni-theme-cardless-state" style="display:inline-block;font-size:11px;font-weight:700;transition:color .2s;color:var(--ni-primary,#A0445E)">关</span>
+              <span class="ni-switch-txt" id="ni-theme-cardless-state" >关</span>
             </span>
           </label>
           <label class="ni-switch-row" id="ni-theme-statusbar-follow-row">
@@ -1420,6 +1421,16 @@
           <input type="file" id="ni-import-fi" style="display:none" accept=".zip,.json">
         </div>
         <div class="ni-import-result" id="ni-import-result" style="display:none"></div>
+      </div>
+
+      <!-- 3.5 数据体检-->
+      <div class="ni-card">
+        <div class="ni-ctitle"><span class="ni-ctitle-label"><i class="ti ti-stethoscope"></i>数据体检</span></div>
+        <p class="ni-desc">把清洗、剧情、向量这一路上留下的脏数据查一遍：重名角色、挂在不存在的阶段上的孤儿节点、有节点却没向量的阶段、没清完的分段、正文里找不到的「幻影角色」、退场后又出现的角色。只读检查，不改任何数据，也不消耗 API。</p>
+        <div class="ni-tool-row" style="flex-wrap:wrap;gap:8px">
+          <button class="ni-btn ni-btn-inline" id="ni-btn-health"><i class="ti ti-stethoscope"></i>开始体检</button>
+        </div>
+        <div class="ni-health-report" id="ni-health-report" style="display:none"></div>
       </div>
 
       <!-- 4. 清除缓存-->
@@ -1554,6 +1565,16 @@
               <div class="ni-stage-block-hint" id="ni-stage-block-hint"></div>
             </div>
 
+            <div class="ni-inj-group ni-budget-card">
+              <div class="ni-inj-head"><i class="ti ti-scale"></i><span class="ni-inj-title">预算沙盘</span></div>
+              <p class="ni-inj-sub">拖一下看 token 缩到多少会先掉哪个阶段，只算不发请求</p>
+              <div class="ni-budget-row">
+                <input type="range" id="ni-budget-range" min="1000" max="32000" step="500" value="32000" aria-label="试算单轮注入 token 上限">
+                <span class="ni-budget-val" id="ni-budget-val">32000</span>
+              </div>
+              <div class="ni-budget-out" id="ni-budget-out"><span class="ni-budget-empty">拖动滑条开始估算</span></div>
+            </div>
+
             <div class="ni-inj-group">
               <div class="ni-inj-head"><i class="ti ti-map-pin"></i><span class="ni-inj-title">进度锚点</span></div>
               <p class="ni-inj-sub">你演到哪了：决定直注取哪一段、预告从哪开始</p>
@@ -1580,31 +1601,27 @@
           <div class="ni-stage-budget-note" id="ni-stage-inj-budget-note" style="display:none">未向量阶段单轮注入上限：32000 Token</div>
         </div>
 
-        <div class="ni-stage-view-row">
+        <div class="ni-stage-toolbar" id="ni-stage-toolbar">
           <div class="ni-seg" id="ni-stage-view-toggle" role="group" aria-label="阶段视图切换">
             <button type="button" class="ni-seg-btn on" id="ni-stage-view-list" data-stage-view="list" aria-pressed="true" title="按阶段卡片逐条列出，可编辑概括与屏蔽"><i class="ti ti-list"></i>列表</button>
             <button type="button" class="ni-seg-btn" id="ni-stage-view-timeline" data-stage-view="timeline" aria-pressed="false" title="横向时间线：一眼看清主线、支线、转折与当前进度"><i class="ti ti-timeline"></i>时间线</button>
           </div>
           <span class="ni-stage-view-hint" id="ni-stage-view-hint">时间线只看不改：点阶段或节点回到列表定位</span>
-        </div>
-        <div class="ni-timeline" id="ni-timeline" hidden></div>
-
-        <div class="ni-char-search-row">
-          <div class="ni-char-search">
+          <div class="ni-char-search ni-stage-search">
             <i class="ti ti-search" aria-hidden="true"></i>
             <input id="ni-stage-search" type="search" placeholder="搜阶段标题 / 概括 / 阶段号…" autocomplete="off" aria-label="搜索阶段">
             <button type="button" id="ni-stage-search-clear" class="ni-char-search-clear" title="清空搜索" aria-label="清空搜索" hidden><i class="ti ti-x" aria-hidden="true"></i></button>
           </div>
-        </div>
-
-        <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
+          <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
           <label class="ni-pagination-size">每 <input type="number" id="ni-stage-page-size" value="20" min="1" max="200" step="1" aria-label="每页阶段数"> 一页</label>
           <div class="ni-pagination-current">
             <label>目前第 <input type="number" id="ni-stage-page-current" value="1" min="1" step="1" aria-label="当前阶段页码"> 页</label>
             <button type="button" id="ni-stage-page-prev" class="ni-page-btn ni-stage-page-btn" title="上一页" aria-label="上一页">←</button>
             <button type="button" id="ni-stage-page-next" class="ni-page-btn ni-stage-page-btn" title="下一页" aria-label="下一页">→</button>
           </div>
+          </div>
         </div>
+        <div class="ni-timeline" id="ni-timeline" hidden></div>
         <div id="ni-stage-list"><div class="ni-empty"><i class="ti ti-layout-list"></i>请先在处理页完成清洗</div></div>
       </div>
     </div>
@@ -1656,11 +1673,24 @@
       <div class="ni-modal-title" id="ni-inj-preview-title">本轮注入预览</div>
       <div class="ni-inj-preview-sum" id="ni-inj-preview-sum"></div>
       <div class="ni-inj-preview-list" id="ni-inj-preview-list"></div>
+      <div class="ni-inj-trace" id="ni-inj-trace" style="display:none"></div>
       <div class="ni-inj-preview-actions">
         <button class="ni-bulk-btn off" id="ni-inj-preview-recall" title="用最新几条消息真的跑一次向量召回（会消耗一次 embedding 调用）"><i class="ti ti-search"></i>跑一次真实召回</button>
       </div>
       <div class="ni-modal-btns">
         <button class="ni-modal-confirm" id="ni-inj-preview-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 角色×阶段知情矩阵 -->
+  <div class="ni-modal-bg" id="ni-knowledge-modal" style="display:none">
+    <div class="ni-modal ni-km-card" role="dialog" aria-modal="true" aria-labelledby="ni-knowledge-title">
+      <div class="ni-modal-title" id="ni-knowledge-title">角色 × 阶段知情矩阵</div>
+      <p class="ni-desc" style="margin-top:0">只列「身份或已知事实发生变化」的阶段。秘密身份在揭晓阶段之前标成「秘密」，AI 不应该说破。</p>
+      <div class="ni-km-body" id="ni-km-body"></div>
+      <div class="ni-modal-btns">
+        <button class="ni-modal-confirm" id="ni-knowledge-close">关闭</button>
       </div>
     </div>
   </div>

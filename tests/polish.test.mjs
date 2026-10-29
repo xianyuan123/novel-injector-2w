@@ -48,7 +48,13 @@ check('A2 prompt-ready 的 Promise 有 catch，异常会进运行记录而不是
     assert.ok(block.includes('niLogIssue'), '失败没记进运行记录');
 });
 check('A3 onPromptReady 只建一次剧情索引，然后往下传', () => {
-    const fn = slice(idx, 'async function onPromptReady', '// ── onPromptReady 补丁');
+    // 只切 onPromptReady 这一个函数体：从函数声明到下一个顶格 `}` 为止。
+    // （以前切到「补丁」注释，文件里往后新增的顶层函数会被误算进来。）
+    const startAt = idx.indexOf('async function onPromptReady');
+    assert.ok(startAt >= 0, '找不到 onPromptReady');
+    const endAt = idx.indexOf('\n}\n', startAt);
+    assert.ok(endAt > startAt, '定位不到函数结尾');
+    const fn = idx.slice(startAt, endAt + 3);
     assert.ok(fn.includes('const allPlotNodes = getAllPlotsInStoryOrder(S);'));
     assert.ok(fn.indexOf('const allPlotNodes') < fn.indexOf('niResolveStageInjectionExecutionPlan'),
         '索引在计划之后才算，等于没省');

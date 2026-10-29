@@ -17,7 +17,16 @@
   font-family: var(--font-sans, sans-serif);
   display: flex;
   flex-direction: column;
+  /* 高度：默认 600，短屏（手机/矮抽屉）自动收，避免底栏被裁 */
   height: 600px;
+  max-height: calc(100dvh - 24px);
+  /* 控件高度只有三档：主操作 40 / 常规控件 32 / 迷你 24 */
+  --ni-ctl-h: 32px;
+  --ni-mini-h: 24px;
+  --ni-cta-h: 40px;
+  /* 让窄面板判断基于容器宽度而不是视口（酒馆侧栏常见 320～420px） */
+  container-type: inline-size;
+  container-name: ni-app;
   overflow: visible;
   position: relative;
   background: var(--ni-surface-bg, var(--color-background-tertiary));
@@ -47,8 +56,11 @@
   --color-background-secondary: rgba(128, 128, 128, .10);
   --color-background-tertiary: rgba(128, 128, 128, .16);
   --color-text-primary: var(--SmartThemeBodyColor, #ddd);
-  --color-text-secondary: var(--SmartThemeBodyColor, #ddd);
-  --color-text-tertiary: var(--SmartThemeBodyColor, #ddd);
+  /* 二级/三级文字要能看出层级：先给不支持 color-mix 的环境一个近似值，再用 color-mix 按主题色稀释 */
+  --color-text-secondary: rgba(221, 221, 221, .74);
+  --color-text-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 74%, transparent);
+  --color-text-tertiary: rgba(221, 221, 221, .56);
+  --color-text-tertiary: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 56%, transparent);
   --color-border-secondary: var(--SmartThemeBorderColor, rgba(255, 255, 255, .2));
   --color-border-tertiary: var(--SmartThemeBorderColor, rgba(255, 255, 255, .12));
   --ni-plot-node-bg: var(--SmartThemeBlurTintColor, var(--color-background-secondary));
@@ -384,11 +396,9 @@
 
 /* ---- Card Title ----*/
 .ni-ctitle {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: .06em;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
   margin-bottom: 10px;
   display: flex;
   align-items: center;
@@ -596,7 +606,7 @@
   border: .5px solid var(--color-border-secondary);
   background: transparent;
   color: var(--color-text-primary);
-  min-height: 42px;
+  min-height: var(--ni-cta-h, 40px);
   margin-top: 10px;
 }
 .ni-btn:first-of-type { margin-top: 0; }
@@ -627,7 +637,7 @@
   /* 与 ni-btn-inline 对齐*/
   flex: 1;
   min-width: 80px;
-  min-height: 34px;
+  min-height: var(--ni-ctl-h, 32px);
   padding: 0 10px;
   justify-content: center;
   margin-top: 0;
@@ -693,8 +703,8 @@
 #ni-app #ni-vec-batch-size::-ms-expand { display: none !important; }
 
 .ni-icon-btn {
-  width: 34px; height: 34px;
-  min-height: 34px; padding: 0;
+  width: var(--ni-ctl-h, 32px); height: var(--ni-ctl-h, 32px);
+  min-height: var(--ni-ctl-h, 32px); padding: 0;
   border-radius: 4px;
   display: inline-flex;
   align-items: center; justify-content: center;
@@ -3060,11 +3070,16 @@ select.ni-modal-input {
 }
 .ni-char-edit-btn,
 .ni-char-pm-btn {
-  font-size: 11px; color: var(--color-text-secondary);
+  font-size: 11.5px; color: var(--color-text-secondary);
   background: transparent; border: .5px solid var(--color-border-secondary);
   border-radius: 5px; padding: 3px 7px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  min-height: var(--ni-mini-h, 24px);
 }
+
+/* 向量化：阶段选择那一排小按钮（原来是散落的内联样式 + emoji 图标）*/
+.ni-vsp-tools { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.ni-vsp-tools .ni-char-edit-btn { flex: 0 0 auto; }
 .ni-char-eye {
   background: none; border: none; cursor: pointer;
   font-size: 15px; padding: 0; line-height: 1;
@@ -4510,6 +4525,18 @@ select.ni-modal-input {
 /* ============================================================
    剧情时间线：阶段横向排开，主线 / 支线 / 转折分行
    ============================================================ */
+/* 阶段页顶部工具栏：视图切换 + 搜索 + 分页挤在一行，窄面板自动折行 */
+.ni-stage-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.ni-stage-toolbar .ni-seg { flex: 0 0 auto; }
+.ni-stage-toolbar .ni-stage-search { flex: 1 1 180px; min-width: 0; }
+.ni-stage-toolbar .ni-list-pagination { margin: 0; flex: 0 0 auto; gap: 6px; }
+.ni-stage-toolbar .ni-stage-view-hint { flex: 1 1 100%; }
 .ni-stage-view-row {
   display: flex;
   align-items: center;
@@ -5053,10 +5080,139 @@ select.ni-modal-input {
 }
 .ni-inj-check input { flex-shrink: 0; margin: 1px 0 0; accent-color: var(--ni-primary, #A0445E); }
 
-/* 窄面板（酒馆侧边栏常见的 320～420px）里，卡片一律单列，留白优先 */
+/* 窄面板（酒馆侧边栏常见的 320～420px）里，卡片一律单列，留白优先。
+   用容器查询而不是视口查询：酒馆桌面端的侧栏只有 300～420px 宽，但视口是全屏的。 */
+@container ni-app (max-width: 520px) {
+  .ni-inj-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
+@container ni-app (max-width: 430px) {
+  .ni-inj-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .ni-stat-row { grid-template-columns: 1fr; }
+  .ni-stat-card { text-align: left !important; padding: 3px 0; }
+  .ni-stat-card + .ni-stat-card { border-left: none; border-top: .5px solid var(--color-border-tertiary); }
+  .ni-char-search-row { flex-wrap: wrap; }
+  .ni-ctitle { gap: 5px; }
+  .ni-ctitle-prog { flex-basis: 100%; }
+  .ni-stage-toolbar { gap: 6px; }
+  .ni-stage-toolbar .ni-list-pagination { flex: 1 1 100%; justify-content: space-between; }
+  .ni-modal { width: min(96vw, 520px); }
+}
+/* 老浏览器兜底（不支持容器查询时仍按视口收窄） */
 @media (max-width: 520px) {
   .ni-inj-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
+
+/* 键盘焦点必须看得见：之前一堆 :focus{outline:none} 把焦点环全关了，
+   用 :focus-visible 只在键盘操作时补回来，鼠标点击不会出现丑框。 */
+.ni-app :focus-visible,
+.ni-modal :focus-visible,
+.ni-modal-bg :focus-visible {
+  outline: 2px solid var(--ni-primary, #A0445E) !important;
+  outline-offset: 1px !important;
+}
+.ni-app button:focus:not(:focus-visible) { outline: none !important; }
+
+/* 开关右侧的「开/关」文字：统一样式，关掉时用弱色（原来开/关都是粉色，看不出状态） */
+.ni-switch-txt {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  transition: color .2s;
+  color: var(--ni-primary, #A0445E);
+}
+.ni-switch-row.ni-switch-off .ni-switch-txt { color: var(--color-text-tertiary); }
+
+/* 注入预览里的「召回溯源」：为什么这块被选中、为什么那块被丢了 */
+.ni-inj-trace {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: .5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  background: var(--color-background-secondary);
+}
+.ni-trace-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.ni-trace-head span { font-weight: 400; font-size: 11px; color: var(--color-text-tertiary); }
+.ni-trace-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ni-trace-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--color-background-primary);
+  flex-wrap: wrap;
+}
+.ni-trace-list li.dropped { opacity: .62; }
+.ni-trace-stage { color: var(--color-text-secondary); white-space: nowrap; }
+.ni-trace-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ni-primary, #A0445E);
+  min-width: 40px;
+}
+.ni-trace-hits { flex: 1 1 120px; min-width: 0; color: var(--color-text-tertiary); }
+.ni-trace-ok { color: var(--ni-success-text, #2E7D5E); font-weight: 600; }
+.ni-trace-drop { color: var(--color-text-tertiary); }
+
+/* 预算沙盘 */
+.ni-budget-row { display: flex; align-items: center; gap: 8px; }
+.ni-budget-row input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--ni-primary, #A0445E); }
+.ni-budget-val { flex: 0 0 auto; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-text-secondary); min-width: 44px; text-align: right; }
+.ni-budget-out { font-size: 11.5px; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 3px; }
+.ni-budget-sum { color: var(--color-text-primary); font-weight: 600; }
+.ni-budget-row-item { display: flex; align-items: baseline; gap: 6px; }
+.ni-budget-stage { flex: 0 0 auto; }
+.ni-budget-kind { flex: 1 1 auto; min-width: 0; color: var(--color-text-tertiary); }
+.ni-budget-tk { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.ni-budget-drop { color: var(--ni-warn-text, #B07A16); display: flex; gap: 4px; align-items: center; }
+.ni-budget-ok { color: var(--ni-ok-text, #20794B); display: flex; gap: 4px; align-items: center; }
+.ni-budget-empty { color: var(--color-text-tertiary); }
+
+/* 角色×阶段知情矩阵 */
+.ni-km-card { width: min(94vw, 560px); }
+.ni-km-body { max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.ni-km-empty { font-size: 12px; color: var(--color-text-secondary); display: flex; gap: 6px; align-items: flex-start; }
+.ni-km-char { border: .5px solid var(--color-border-tertiary); border-radius: 8px; padding: 7px 8px; background: var(--color-background-secondary); }
+.ni-km-char.off { opacity: .6; }
+.ni-km-char-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--color-text-primary); }
+.ni-km-cat { font-size: 11px; font-weight: 400; color: var(--color-text-tertiary); }
+.ni-km-off { margin-left: auto; font-size: 10.5px; color: var(--color-text-tertiary); }
+.ni-km-points { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.ni-km-points li { display: flex; gap: 6px; align-items: flex-start; font-size: 11.5px; background: var(--color-background-primary); border-radius: 6px; padding: 4px 6px; }
+.ni-km-points li.current { outline: 1px solid var(--ni-primary, #A0445E); }
+.ni-km-stage { flex: 0 0 auto; color: var(--color-text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ni-km-body { min-width: 0; }
+.ni-km-chip { display: inline-block; margin: 0 4px 3px 0; padding: 1px 6px; border-radius: 999px; background: var(--color-background-tertiary); font-size: 11px; }
+.ni-km-chip.secret { background: var(--ni-warn-soft, #FBF3DD); color: var(--ni-warn-text, #B07A16); }
+.ni-km-facts { color: var(--color-text-secondary); margin-top: 2px; }
+.ni-km-none { color: var(--color-text-tertiary); }
+
+/* 数据体检报告 */
+.ni-health-report { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ni-health-sum { font-size: 12px; color: var(--color-text-secondary); }
+.ni-health-ok { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ni-success-text, #2E7D5E); }
+.ni-health-group { border: .5px solid var(--color-border-tertiary); border-radius: 8px; padding: 8px 9px; background: var(--color-background-secondary); }
+.ni-health-group.warn { border-color: var(--ni-warn-border, #E6C36B); }
+.ni-health-group-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--color-text-primary); }
+.ni-health-group.warn .ni-health-group-head i { color: var(--ni-warn-text, #B07A16); }
+.ni-health-group-count { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--color-text-tertiary); }
+.ni-health-group-hint { font-size: 11px; color: var(--color-text-tertiary); margin: 2px 0 6px; }
+.ni-health-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.ni-health-list li { background: var(--color-background-primary); border-radius: 6px; padding: 5px 7px; font-size: 11.5px; }
+.ni-health-item-head { display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.ni-health-item-label { font-weight: 600; color: var(--color-text-primary); }
+.ni-health-item-detail { color: var(--color-text-secondary); }
+.ni-health-item-fix { margin-top: 2px; font-size: 11px; color: var(--ni-primary, #A0445E); display: flex; gap: 4px; align-items: center; }
 
 /* ===== 角色页：搜索 / 排序 / 人数徽标 ===== */
 .ni-char-search-row {
