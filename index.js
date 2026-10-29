@@ -300,6 +300,13 @@ function niNormalizeRecallIntInput(raw, fallback, { min = 0, max = 200 } = {}) {
     const base = Number.isFinite(parsed) ? parsed : (parseInt(fallback, 10) || 0);
     return Math.min(max, Math.max(min, base));
 }
+// 动态 import('/script.js') 拿到的永远是同一份模块，但每次都会多一次微任务与解析开销，
+// 而 prompt-ready 是「每条消息都过一遍」的热路径。这里记下 Promise，第一次之后直接复用。
+let _niScriptModulePromise = null;
+function niLoadScriptModule() {
+    if (!_niScriptModulePromise) _niScriptModulePromise = import('/script.js');
+    return _niScriptModulePromise;
+}
 // 通过 Error stack trace 获取当前模块的实际路径
 function _detectExtFolder() {
     try {
@@ -977,7 +984,7 @@ function niGetProgressAnchorNodeId(cfg = extension_settings[EXT_NAME] || {}) {
     return nodeId || '';
 }
 
-function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME] || {}) {
+function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME] || {}, { allNodes = null } = {}) {
     const enabledStages = [];
     for (let i = 1; i <= S.stageMapN; i++) {
         if (S.stageStates[i] !== false) enabledStages.push(i);
@@ -990,7 +997,7 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
 
     let curTbNode = null;
     if (cfg.transBookMode) {
-        curTbNode = niTbGetInjectionNode(niGetTbNodes());
+        curTbNode = niTbGetInjectionNode(niGetTbNodes(allNodes));
     }
     const vectorRecallScope = niResolveVectorRecallStageScopes({
         enabledStages,
@@ -1017,7 +1024,7 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
         settings: cfg,
         // 只有「一个 chunk 里的节点全被屏蔽」才算整块屏蔽：把节点→chunk 的归属
         // 交给统一入口算一次，避免在召回热路径里反复遍历全部剧情节点。
-        explicitPlotEntries: getAllPlotsInStoryOrder(S),
+        explicitPlotEntries: allNodes || getAllPlotsInStoryOrder(S),
     });
 
     return {
@@ -1037,9 +1044,9 @@ function niResolveStageInjectionExecutionPlan(cfg = extension_settings[EXT_NAME]
     };
 }
 
-function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_NAME] || {}) {
+function niBuildStageInjectionPayloadForPlan(plan, cfg = extension_settings[EXT_NAME] || {}, { runtimeIndex: precomputedIndex = null } = {}) {
     const rawMode = niNormalizeRawInjMode(cfg.rawInjMode);
-    const runtimeIndex = niBuildStageRuntimeIndex(S);
+    const runtimeIndex = precomputedIndex || niBuildStageRuntimeIndex(S);
     const maxTokens = niNormalizeRawInjectionMaxTokens(
         cfg.plotInjMaxTokens,
         DEFAULT_SETTINGS.plotInjMaxTokens,
@@ -1826,6 +1833,7 @@ const {
     niVectorConcurrencyLimit,
     niRunVectorItems,
     niStartVec,
+    niRequestVecStop,
     niVecFillMissing,
     niRenderVecStageSelector,
     niToggleStagePanel,
@@ -1961,6 +1969,7 @@ const {
     niSetStagePageSize,
     niSetStagePage,
     niChangeStagePage,
+    niSetStageQuery,
     niLoadStagePageFromChat,
     niToggleStageBody,
     niCancelStageEdit,
@@ -2062,6 +2071,7 @@ const {
     niSetNovelLibraryPageSize,
     niSetNovelLibraryPage,
     niChangeNovelLibraryPage,
+    niSetNovelLibraryQuery,
     niSaveNovelSnapshot,
     niUpdateNovelSnapshot,
     niRenameNovelSnapshot,
@@ -2221,6 +2231,7 @@ Object.assign(window, {
     niClearVecCache,
     niClearAllData,
     niStartVec,
+    niRequestVecStop,
     niVecFillMissing,
     niToggleStagePanel,
     niRenderVecStageSelector,
@@ -4213,7 +4224,7 @@ function niSaveOffscreenSettingsFromUi() {
  * 与阶段直注共用同一个 Token 上限（`plotInjMaxTokens`），装不下就在节点边界处停住，
  * 不会把半句话切给模型。
  */
-function niBuildFuturePlotInjectionPayload(plan, cfg = extension_settings[EXT_NAME] || {}) {
+function niBuildFuturePlotInjectionPayload(plan, cfg = extension_settings[EXT_NAME] || {}, { runtimeIndex: precomputedIndex = null } = {}) {
     if (!niIsFuturePlotInjectionEnabled(cfg)) return null;
     const stageCount = niNormalizeFuturePlotStageCount(
         cfg.futurePlotStages,
@@ -4892,11 +4903,11 @@ function niUpdateOnboardUI() {
  * 组装向量召回用的加权查询。注入主链与「注入预览」共用这一份，
  * 保证预览里「跑一次真实召回」看到的就是真正会发出去的那批片段。
  */
-function niBuildVectorRecallInputs(plan, chat = []) {
+function niBuildVectorRecallInputs(plan, chat = [], { allNodes = null } = {}) {
     const cfg = extension_settings[EXT_NAME] || {};
     const { curTbNode, vectorRecallScope } = plan || {};
     const nodeRecallContext = curTbNode
-        ? niBuildTbLightRecallContext(curTbNode, { nodes: getAllPlotsInStoryOrder(S) })
+        ? niBuildTbLightRecallContext(curTbNode, { nodes: allNodes || getAllPlotsInStoryOrder(S) })
         : null;
     const lightRecallContext = cfg.tbLightRecallMode ? nodeRecallContext : null;
     const nodeContext = niBuildCurrentStageNodeRecallQuery(vectorRecallScope, curTbNode);
@@ -4926,7 +4937,7 @@ async function onPromptReady(eventData) {
     // 获取 setExtensionPrompt 一次供后续使用
     let setExtensionPrompt;
     try {
-        ({ setExtensionPrompt } = await import('/script.js'));
+        ({ setExtensionPrompt } = await niLoadScriptModule());
     } catch (e) {
         console.warn('[NI] 无法导入 setExtensionPrompt:', e);
     }
@@ -4967,8 +4978,17 @@ async function onPromptReady(eventData) {
     const plotDepth= cfg.plotInjDepth?? DEFAULT_SETTINGS.plotInjDepth;
     const plotRole = cfg.plotInjRole ?? DEFAULT_SETTINGS.plotInjRole;
 
+    // 同一条消息里只建一次剧情索引：以前这里的 5 处调用各建各的，
+    // 长篇小说（几千个剧情节点）每条消息都要重复遍历 5 遍。
+    const allPlotNodes = getAllPlotsInStoryOrder(S);
+    let stageRuntimeIndex = null;
+    const getStageRuntimeIndex = () => {
+        if (!stageRuntimeIndex) stageRuntimeIndex = niBuildStageRuntimeIndex(S);
+        return stageRuntimeIndex;
+    };
+
     // 分离向量召回与普通直注，并统一解析穿书模式下真正会参与本轮的阶段。
-    const stageInjectionPlan = niResolveStageInjectionExecutionPlan(cfg);
+    const stageInjectionPlan = niResolveStageInjectionExecutionPlan(cfg, { allNodes: allPlotNodes });
     const {
         enabledStages,
         vectorInjectionDisabled,
@@ -4987,7 +5007,7 @@ async function onPromptReady(eventData) {
             lightRecallContext,
             weightedQueries,
             keywordTerms,
-        } = niBuildVectorRecallInputs(stageInjectionPlan, chat);
+        } = niBuildVectorRecallInputs(stageInjectionPlan, chat, { allNodes: allPlotNodes });
 
         if (weightedQueries.length) {
             try {
@@ -5030,7 +5050,7 @@ async function onPromptReady(eventData) {
             cfg.plotInjMaxTokens,
             DEFAULT_SETTINGS.plotInjMaxTokens,
         );
-        const result = niBuildStageInjectionPayloadForPlan(stageInjectionPlan, cfg);
+        const result = niBuildStageInjectionPayloadForPlan(stageInjectionPlan, cfg, { runtimeIndex: getStageRuntimeIndex() });
 
         if (result.content) {
             doInject(`${EXT_NAME}_plot`, result.content, plotPos, plotDepth, plotRole);
@@ -5058,7 +5078,7 @@ async function onPromptReady(eventData) {
             if (niNormalizeRawInjMode(cfg.rawInjMode) === 'compressed') {
                 await niEnsureChunksLoaded();
             }
-            const futurePlot = niBuildFuturePlotInjectionPayload(stageInjectionPlan, cfg);
+            const futurePlot = niBuildFuturePlotInjectionPayload(stageInjectionPlan, cfg, { runtimeIndex: getStageRuntimeIndex() });
             if (futurePlot?.content) {
                 doInject(`${EXT_NAME}_future_plot`, futurePlot.content, plotPos, plotDepth, plotRole);
             }
@@ -5079,7 +5099,7 @@ async function onPromptReady(eventData) {
     }
 
     // ③ 角色人设注入（取文与「注入预览」共用 niBuildCharInjectionText，两边不会跑偏）
-    const charContent = niBuildCharInjectionText(plan);
+    const charContent = niBuildCharInjectionText(stageInjectionPlan);
     if (charContent) {
         doInject(`${EXT_NAME}_char`, charContent, charPos, charDepth, charRole);
     }
@@ -5321,7 +5341,7 @@ jQuery(async () => {
     // 绑定图标点击
     let _niNavbarClick = null;
     try {
-        const scriptModule = await import('/script.js');
+        const scriptModule = await niLoadScriptModule();
         if (scriptModule.doNavbarIconClick) _niNavbarClick = scriptModule.doNavbarIconClick;
     } catch (_) {}
 
@@ -5704,6 +5724,7 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     $app.on('click', '#ni-vec-cfg-btn', () => niTogglePanel('ni-vec-api', 'ni-vec-cfg-btn'));
     $app.on('click', '#ni-vec-stage-btn', () => niToggleStagePanel());  // 选择阶段 → 展开/收起面板
     $app.on('click', '#ni-btn-vec', () => niStartVec());             // 开始向量化 → 直接用当前勾选
+    $app.on('click', '#ni-btn-vec-stop', () => niRequestVecStop());   // 停止向量化：改成「补全缺失」续跑
     $app.on('click', '#ni-btn-vec-fill', () => niVecFillMissing());    // 补全缺失向量块
 
     // 向量化阶段面板内按钮
@@ -6224,6 +6245,39 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     });
     $app.on('click', '#ni-btn-gen-stages',       () => niGenStagesManual(false));
     $app.on('click', '#ni-btn-gen-stages-empty', () => niGenStagesManual(true));
+
+    // 阶段列表搜索（防抖 160ms；命中标题 / 概括 / 阶段号）
+    let _niStageSearchTimer = 0;
+    function niSyncStageSearchClear(hasText) {
+        const btn = q('#ni-stage-search-clear');
+        if (btn) btn.hidden = !hasText;
+    }
+    $app.on('input', '#ni-stage-search', function() {
+        const value = String(this.value || '');
+        niSyncStageSearchClear(!!value);
+        if (_niStageSearchTimer) clearTimeout(_niStageSearchTimer);
+        _niStageSearchTimer = setTimeout(() => {
+            _niStageSearchTimer = 0;
+            niSetStageQuery(value);
+        }, 160);
+    });
+    $app.on('keydown', '#ni-stage-search', function(e) {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        this.value = '';
+        niSyncStageSearchClear(false);
+        if (_niStageSearchTimer) { clearTimeout(_niStageSearchTimer); _niStageSearchTimer = 0; }
+        niSetStageQuery('');
+    });
+    $app.on('click', '#ni-stage-search-clear', function(e) {
+        e.preventDefault();
+        const input = q('#ni-stage-search');
+        if (input) input.value = '';
+        niSyncStageSearchClear(false);
+        if (_niStageSearchTimer) { clearTimeout(_niStageSearchTimer); _niStageSearchTimer = 0; }
+        niSetStageQuery('');
+        input?.focus();
+    });
 
     // 角色 Tab 切换
     $app.on('click', '#ni-char-tab-row .ni-tab', function() {
@@ -6764,6 +6818,38 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     $app.on('change', '#ni-lib-page-current', function() {
         niSetNovelLibraryPage(this.value);
     });
+    // 小说库搜索（按快照名，防抖 160ms）
+    let _niLibSearchTimer = 0;
+    function niSyncLibSearchClear(hasText) {
+        const btn = q('#ni-lib-search-clear');
+        if (btn) btn.hidden = !hasText;
+    }
+    $app.on('input', '#ni-lib-search', function() {
+        const value = String(this.value || '');
+        niSyncLibSearchClear(!!value);
+        if (_niLibSearchTimer) clearTimeout(_niLibSearchTimer);
+        _niLibSearchTimer = setTimeout(() => {
+            _niLibSearchTimer = 0;
+            niSetNovelLibraryQuery(value);
+        }, 160);
+    });
+    $app.on('keydown', '#ni-lib-search', function(e) {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        this.value = '';
+        niSyncLibSearchClear(false);
+        if (_niLibSearchTimer) { clearTimeout(_niLibSearchTimer); _niLibSearchTimer = 0; }
+        niSetNovelLibraryQuery('');
+    });
+    $app.on('click', '#ni-lib-search-clear', function(e) {
+        e.preventDefault();
+        const input = q('#ni-lib-search');
+        if (input) input.value = '';
+        niSyncLibSearchClear(false);
+        if (_niLibSearchTimer) { clearTimeout(_niLibSearchTimer); _niLibSearchTimer = 0; }
+        niSetNovelLibraryQuery('');
+        input?.focus();
+    });
     $app.on('keydown', '#ni-lib-page-size, #ni-lib-page-current', function(e) {
         if (e.key !== 'Enter') return;
         e.preventDefault();
@@ -6856,7 +6942,17 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     }
 
     // 监听酒馆事件：发消息前注入上下文
-    eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, onPromptReady);
+    // 回调必须自己接住异常：注入链任何一段抛错都不能让整轮注入静默消失（历史上 char 段引用了不存在的
+    // 变量，导致 ③人设/④世界/偏差/文风 四段每轮全部失效且界面毫无提示）。
+    eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, (eventData) => {
+        const p = onPromptReady(eventData);
+        if (p && typeof p.catch === 'function') {
+            p.catch(e => {
+                console.error('[NI] 上下文注入失败:', e);
+                try { niLogIssue('上下文注入', e?.message || String(e)); } catch { /* 忽略日志本身的问题 */ }
+            });
+        }
+    });
     eventSource.makeLast?.(event_types.CHAT_COMPLETION_PROMPT_READY, niFinalUserSubPromptRewrite);
     eventSource.makeLast?.(event_types.MESSAGE_RECEIVED, niPostprocessUserSubMessage);
     niBindDeviationAutoUpdateEvents();
@@ -6947,7 +7043,7 @@ jQuery(document).ready(function () {
             const cfg = extension_settings[EXT_NAME];
             let setExtensionPromptFn = null;
             try {
-                const mod = await import('/script.js');
+                const mod = await niLoadScriptModule();
                 setExtensionPromptFn = mod.setExtensionPrompt || null;
             } catch (_) {}
 

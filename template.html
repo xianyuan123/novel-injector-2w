@@ -224,6 +224,9 @@
           <button class="ni-btn ni-btn-p ni-btn-inline" id="ni-btn-vec">
             <i class="ti ti-vector"></i>开始向量化
           </button>
+          <button class="ni-ctrl-btn ni-ctrl-fill ni-btn-inline" id="ni-btn-vec-stop" style="display:none" title="停下当前向量化，已完成的块会保留，之后可点「补全缺失」继续">
+            <i class="ti ti-player-stop"></i>停止
+          </button>
           <button class="ni-ctrl-btn ni-ctrl-fill ni-btn-inline" id="ni-btn-vec-fill" style="display:none">
             <i class="ti ti-puzzle"></i>补全缺失
           </button>
@@ -1373,6 +1376,13 @@
         <div class="ni-tool-row" style="margin-bottom:8px">
           <button class="ni-btn ni-btn-p ni-btn-inline" id="ni-lib-save-btn"><i class="ti ti-device-floppy"></i>保存</button>
         </div>
+        <div class="ni-char-search-row">
+          <div class="ni-char-search">
+            <i class="ti ti-search" aria-hidden="true"></i>
+            <input id="ni-lib-search" type="search" placeholder="搜快照名称…" autocomplete="off" aria-label="搜索小说库快照">
+            <button type="button" id="ni-lib-search-clear" class="ni-char-search-clear" title="清空搜索" aria-label="清空搜索" hidden><i class="ti ti-x" aria-hidden="true"></i></button>
+          </div>
+        </div>
         <!-- 保存快照输入框-->
         <div class="ni-lib-save-panel-box" id="ni-lib-save-panel" style="display:none">
           <div class="ni-field">
@@ -1573,6 +1583,14 @@
           <span class="ni-stage-view-hint" id="ni-stage-view-hint">时间线只看不改：点阶段或节点回到列表定位</span>
         </div>
         <div class="ni-timeline" id="ni-timeline" hidden></div>
+
+        <div class="ni-char-search-row">
+          <div class="ni-char-search">
+            <i class="ti ti-search" aria-hidden="true"></i>
+            <input id="ni-stage-search" type="search" placeholder="搜阶段标题 / 概括 / 阶段号…" autocomplete="off" aria-label="搜索阶段">
+            <button type="button" id="ni-stage-search-clear" class="ni-char-search-clear" title="清空搜索" aria-label="清空搜索" hidden><i class="ti ti-x" aria-hidden="true"></i></button>
+          </div>
+        </div>
 
         <div class="ni-list-pagination ni-stage-pagination" id="ni-stage-pagination">
           <label class="ni-pagination-size">每 <input type="number" id="ni-stage-page-size" value="20" min="1" max="200" step="1" aria-label="每页阶段数"> 一页</label>

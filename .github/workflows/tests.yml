@@ -1,0 +1,36 @@
+name: tests
+
+# 测试全部是纯 Node 标准库脚本（node:assert / node:fs），
+# 不依赖任何 npm 包，所以这里**没有** npm install —— 只要 node 在就能跑。
+on:
+  push:
+  pull_request:
+  # 允许 release.yml 复用这套测试作为发布门禁
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: node 22 / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 环境信息
+        run: |
+          node --version
+          python3 --version
+
+      - name: 跑全套测试（串行，任一失败即红）
+        run: node tests/run-all.mjs
