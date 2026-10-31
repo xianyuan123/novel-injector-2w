@@ -5005,7 +5005,10 @@ async function onPromptReady(eventData) {
         if (opts.applyUserSub !== false) content = niApplyUserSubstitution(content);
         if (!content.trim()) return;
         if (eventData?.chat && Array.isArray(eventData.chat)) {
-            niInsertIntoEventChat(eventData.chat, content, pos, depth, role);
+            // mergeSystemHead：主提示前/后都并进第一条 system 的文本里，不再塞独立消息
+            // （独立消息在最前面时，Claude/Gemini 适配器会合并或丢弃它，中转也常把
+            //  messages[0] 当成主提示词替换，表现出来就是「注入没生效」）
+            niInsertIntoEventChat(eventData.chat, content, pos, depth, role, { mergeSystemHead: true });
         } else if (setExtensionPrompt) {
             setExtensionPrompt(key, content, pos, depth, true, role);
         }
