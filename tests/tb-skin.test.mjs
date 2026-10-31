@@ -90,5 +90,17 @@ console.log('[E] 接线');
     ok(tb.includes('function niRestyleStorybar'), 'E8 换皮肤会重建状态栏 DOM');
 }
 
+// ── F 节点卡可滚动 ───────────────────────────────────────
+console.log('[F] 节点卡滚动与滑动');
+{
+    const tb = readPlugin('lib/transbook-system.js');
+    ok(/\.ni-tb-scard\{[^}]*overflow-y:auto/.test(tb), 'F1 卡片纵向可滚动');
+    ok(/\.ni-tb-scard\{[^}]*touch-action:pan-y/.test(tb), 'F2 竖滑交给卡片自己滚');
+    ok(/\.ni-tb-sc-desc\{[^}]*overflow:visible/.test(tb) && !tb.includes('line-clamp'), 'F3 描述不再截断行数');
+    ok(tb.includes('function niTbBindSwipe') && tb.includes('niTbBindSwipe();'), 'F4 左右滑动切节点已接回');
+    ok(tb.includes('.ni-tb-scard::-webkit-scrollbar{width:4px}'), 'F5 细滚动条样式');
+    ok(tb.includes('activeCard.scrollTop = 0'), 'F6 切卡后回到顶部');
+}
+
 console.log(`\n通过 ${pass} / ${pass + fail}，失败 ${fail}`);
 process.exit(fail ? 1 : 0);
