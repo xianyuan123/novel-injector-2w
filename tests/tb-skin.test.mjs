@@ -11,20 +11,16 @@ const tpl = readPlugin('template.html');
 const ok = (cond, msg) => { assert.ok(cond, msg); console.log('  OK  ' + msg); };
 
 console.log('[A] 底图与皮肤样式');
-ok(css.includes('--ni-tb-plate'), 'A1 style.css 定义了皮肤底图变量');
-ok(/--ni-tb-plate:\s*url\("data:image\/webp;base64,[A-Za-z0-9+/=]{1000,}/.test(css), 'A2 底图是内联 WebP data URI（不额外请求文件）');
-ok(css.includes(':has(.ni-tb-body.open)'), 'A3 只在展开状态套皮肤（收起时不拉伸底图）');
+ok(css.includes('--ni-tb-skin-img'), 'A1 style.css 定义了皮肤底图变量');
+ok(/--ni-tb-skin-img:\s*url\("data:image\/webp;base64,[A-Za-z0-9+/=]{1000,}/.test(css), 'A2 底图是内联 WebP data URI（不额外请求文件）');
+ok(css.includes(':has(.ni-tb-body.open)'), 'A3 只在展开状态套皮肤（收起时保持原横条）');
 ok(css.includes('.ni-tb-scard.active') && css.includes('box-sizing: border-box'), 'A4 卡片按 border-box 定高，不会被裁');
-ok(css.includes('aspect-ratio: 2 / 3'), 'A5 展开后按底图 2:3 比例撑开');
-ok(css.includes('container-type: inline-size') && /\.ni-tb-bar \{[^}]*cqw/.test(css), 'A6 用容器查询单位 cqw 按原图坐标定位');
-ok(css.includes('.ni-tb-drop-panel') && /position: absolute;\s*left: 8\.5cqw/.test(css), 'A7 选择面板改成盖在卡片上的浮层');
-ok(css.includes('background: var(--ni-tb-plate) center / 100% 100% no-repeat'), 'A8 底图整张铺满（不重复、不裁切）');
-ok(css.includes('--ni-tb-plate: url("data:image/webp;base64,'), 'A8b 底图是去字后的净版（不含画好的按钮图标）');
-
-ok(css.includes('width: 86cqw'), 'A9 轮播容器占满内框，右边留出下一张的边');
-ok(!css.includes('.ni-tb-scard:not(.active) { display: none; }'), 'A10 侧卡没有被隐藏，轮播照常渲染');
-ok(tb.includes('niTbSyncCardMetrics') && tb.includes('TB_SKIN'), 'A11 卡片尺寸随皮肤等比放大（布局逻辑不变）');
-ok(tb.includes('function niTbBindSwipe') && tb.includes('niTbBindSwipe();'), 'A12 加了左右滑动切换节点');
+ok(css.includes('padding: 15.5% 7.4% 15%'), 'A5 内容按底图内框留边（百分比自适应）');
+ok(css.includes('background-image: var(--ni-tb-skin-img)'), 'A6 底图铺满整个外壳');
+ok(css.includes('height: 204px'), 'A7 轮播容器加高，装得下放大的卡片');
+ok(!css.includes('.ni-tb-scard:not(.active) { display: none; }'), 'A8 侧卡没有被隐藏，右边能看到下一张');
+ok(tb.includes('function niTbBindSwipe') && tb.includes('niTbBindSwipe();'), 'A9 加了左右滑动切换节点');
+ok(tb.includes('const TB_AW = 214, TB_SW = 150, TB_GAP = 10;'), 'A10 卡片尺寸沿用原布局（第一版不改 JS 度量）');
 
 console.log('[B] 开关接线');
 ok(/const skinClass = cfg\.tbStatusSkin !== false \? ' ni-tb-skin' : '';/.test(tb), 'B1 外壳按设置加 ni-tb-skin');
