@@ -7567,6 +7567,13 @@ jQuery(document).ready(function () {
         }
     });
 
+    $app.on('change', '#ni-tb-bar-legacy', function () {
+        const cfg = extension_settings[EXT_NAME] || {};
+        cfg.tbBarLegacy = !!this.checked;
+        try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
+        try { niTbSyncStoryBar(niCreateTbSnapshot()); } catch (e) { console.warn('[NI] 切换状态栏版本失败:', e); }
+    });
+
     $app.on('click', '#ni-tb-skin-clear', () => {
         niTbSetSkin({ art: '', veil: 0, accent: '', title: '', text: '', barBg: '', cardBg: '', cardLine: '', pad: null, forcePad: 0, radius: 16, cardH: 196, cardPad: 14 });
         niTbSyncSkinUI();
