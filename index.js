@@ -201,16 +201,6 @@ import {
     createTransbookController,
     niResolveTransbookStagePagination,
 } from './lib/transbook-system.js';
-import {
-    NI_TB_VAR_KEYS,
-    niTbAllSkins,
-    niTbFileToArt,
-    niTbFindSkin,
-    niTbNormalizeVars,
-    niTbSampleImage,
-    niTbUniqueSkinName,
-    niTbVarsFromPalette
-} from './lib/transbook-skin.js';
 
 import {
     createGenerationController,
@@ -415,9 +405,6 @@ const DEFAULT_SETTINGS = {
     themeBorderless: false,
     themeCardless: false,
     themeStatusbarFollow: false,
-    tbSkinId: 'plain',
-    tbSkins: [],
-    tbSkinVars: {},
     themeIconReplace: false,
     themeBackground: NI_THEME_DEFAULT.background,
     themeText: NI_THEME_DEFAULT.text,
@@ -2304,7 +2291,6 @@ const {
     niTbSaveState,
     niTbLoadState,
     niGetTbStoryBarHtml,
-    niRestyleStorybar,
     niEsc,
     niTbBuildStageListHtml,
     niTbBuildNodePanelHtml,
@@ -6970,164 +6956,6 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     $app.on('click', '#ni-theme-delete', () => niThemeEditor.deletePreset());
     $app.on('click', '#ni-theme-new', () => niThemeEditor.newPreset());
     $app.on('click', '#ni-theme-save', () => niThemeEditor.savePreset());
-
-    // ── 状态栏皮肤（上传背景 → 自动取色 → 存成一套皮肤） ──────────────
-    const niTbSkinUserList = () => (Array.isArray(cfg.tbSkins) ? cfg.tbSkins : []);
-
-    function niTbSkinCurrent() {
-        return niTbFindSkin(niTbSkinUserList(), cfg.tbSkinId);
-    }
-
-    function niTbSkinIsBuiltin(id) {
-        return id === 'plain' || id === 'glass' || id === 'paper';
-    }
-
-    function niTbSkinApply() {
-        try { niRestyleStorybar(); } catch (e) { console.warn('[NI] 状态栏皮肤刷新失败', e); }
-        try { saveSettingsDebounced(); } catch { /* 忽略 */ }
-    }
-
-    function niTbSkinRenderList() {
-        const box = q('#ni-tb-skin-list');
-        if (!box) return;
-        const skins = niTbAllSkins(niTbSkinUserList());
-        const activeId = cfg.tbSkinId || 'plain';
-        box.innerHTML = skins.map(s => {
-            const art = s.vars && s.vars.art ? s.vars.art : '';
-            const thumb = art
-                ? `<span class="ni-tb-skin-thumb" style="background-image:url('${art}')"></span>`
-                : `<span class="ni-tb-skin-thumb ni-tb-skin-thumb-empty"><i class="ti ti-layout-bottombar"></i></span>`;
-            return `<div class="ni-tb-skin-item${s.id === activeId ? ' on' : ''}" data-skin-id="${niEsc(s.id)}" title="${niEsc(s.desc || s.name)}">
-                ${thumb}
-                <span class="ni-tb-skin-name">${niEsc(s.name)}</span>
-            </div>`;
-        }).join('');
-        const cur = niTbSkinCurrent();
-        const lbl = q('#ni-tb-skin-current');
-        if (lbl) lbl.textContent = cur ? cur.name : '原版';
-        niTbSkinSyncTune();
-    }
-
-    function niTbSkinSyncTune() {
-        const cur = niTbSkinCurrent();
-        const vars = niTbNormalizeVars({ ...(cur && cur.vars), ...(cfg.tbSkinVars || {}) });
-        const set = (sel, v) => { const el = q(sel); if (el) el.value = v; };
-        set('#ni-tb-var-accent', /^#[0-9a-f]{6}$/i.test(vars.accent) ? vars.accent : '#8f63c9');
-        set('#ni-tb-var-title', /^#[0-9a-f]{6}$/i.test(vars.title) ? vars.title : '#39303f');
-        set('#ni-tb-var-text', /^#[0-9a-f]{6}$/i.test(vars.text) ? vars.text : '#5a5168');
-        set('#ni-tb-var-veil', vars.veil);
-        set('#ni-tb-var-radius', vars.radius || 16);
-        set('#ni-tb-var-cardh', vars.cardH || 204);
-        const put = (sel, v) => { const el = q(sel); if (el) el.textContent = v; };
-        put('#ni-tb-var-veil-v', Math.round(vars.veil * 100) + '%');
-        put('#ni-tb-var-radius-v', (vars.radius || 16) + 'px');
-        put('#ni-tb-var-cardh-v', (vars.cardH || 204) + 'px');
-    }
-
-    function niTbSkinSetVar(key, value) {
-        cfg.tbSkinVars = { ...(cfg.tbSkinVars || {}), [key]: value };
-        niTbSkinApply();
-        niTbSkinSyncTune();
-    }
-
-    $app.on('click', '#ni-tb-skin-list .ni-tb-skin-item', function() {
-        const id = this.dataset.skinId;
-        if (!id) return;
-        cfg.tbSkinId = id;
-        cfg.tbSkinVars = {};
-        niTbSkinRenderList();
-        niTbSkinApply();
-    });
-
-    $app.on('click', '#ni-tb-skin-upload', () => q('#ni-tb-skin-file')?.click());
-
-    $app.on('change', '#ni-tb-skin-file', async function() {
-        const file = this.files?.[0];
-        this.value = '';
-        if (!file) return;
-        try {
-            toastr?.info?.('正在处理图片…');
-            const art = await niTbFileToArt(file, { max: 1400, quality: 0.84 });
-            const palette = await niTbSampleImage(art.dataUrl);
-            const vars = niTbVarsFromPalette(palette);
-            vars.art = art.dataUrl;
-            const skin = {
-                id: 'u' + Date.now().toString(36),
-                name: niTbUniqueSkinName(niTbSkinUserList(), file.name.replace(/\.[^.]+$/, '') || '我的皮肤'),
-                vars
-            };
-            cfg.tbSkins = [...niTbSkinUserList(), skin];
-            cfg.tbSkinId = skin.id;
-            cfg.tbSkinVars = {};
-            niTbSkinRenderList();
-            niTbSkinApply();
-            toastr?.success?.(`已生成皮肤「${skin.name}」，下面的颜色和滑条可以再微调`);
-        } catch (e) {
-            console.error('[NI] 生成皮肤失败', e);
-            toastr?.error?.(e?.message || '生成皮肤失败');
-        }
-    });
-
-    $app.on('input', '#ni-tb-var-accent', function() { niTbSkinSetVar('accent', this.value); });
-    $app.on('input', '#ni-tb-var-title', function() { niTbSkinSetVar('title', this.value); });
-    $app.on('input', '#ni-tb-var-text', function() { niTbSkinSetVar('text', this.value); });
-    $app.on('input', '#ni-tb-var-veil', function() { niTbSkinSetVar('veil', Number(this.value)); });
-    $app.on('input', '#ni-tb-var-radius', function() { niTbSkinSetVar('radius', Number(this.value)); });
-    $app.on('input', '#ni-tb-var-cardh', function() { niTbSkinSetVar('cardH', Number(this.value)); });
-
-    $app.on('click', '#ni-tb-skin-delete', function() {
-        const id = cfg.tbSkinId;
-        if (!id || niTbSkinIsBuiltin(id)) { toastr?.warning?.('内置皮肤不能删，切到自建皮肤再删'); return; }
-        if (typeof confirm === 'function' && !confirm('删除这套皮肤？底图也会一起删掉。')) return;
-        cfg.tbSkins = niTbSkinUserList().filter(s => s.id !== id);
-        cfg.tbSkinId = 'plain';
-        cfg.tbSkinVars = {};
-        niTbSkinRenderList();
-        niTbSkinApply();
-    });
-
-    $app.on('click', '#ni-tb-skin-export', function() {
-        const cur = niTbSkinCurrent();
-        if (!cur) return;
-        const payload = { type: 'ni-tb-skin', version: 1, skin: { id: cur.id, name: cur.name, vars: niTbNormalizeVars(cur.vars) } };
-        try {
-            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `${cur.name || 'skin'}.json`;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-        } catch (e) { console.error(e); toastr?.error?.('导出失败'); }
-    });
-
-    $app.on('click', '#ni-tb-skin-import', () => q('#ni-tb-skin-file-json')?.click());
-
-    $app.on('change', '#ni-tb-skin-file-json', async function() {
-        const file = this.files?.[0];
-        this.value = '';
-        if (!file) return;
-        try {
-            const text = await file.text();
-            const data = JSON.parse(text);
-            const raw = data?.skin || data;
-            if (!raw || typeof raw !== 'object') throw new Error('不是皮肤文件');
-            const skin = {
-                id: 'i' + Date.now().toString(36),
-                name: niTbUniqueSkinName(niTbSkinUserList(), String(raw.name || '导入的皮肤')),
-                vars: niTbNormalizeVars(raw.vars)
-            };
-            cfg.tbSkins = [...niTbSkinUserList(), skin];
-            cfg.tbSkinId = skin.id;
-            cfg.tbSkinVars = {};
-            niTbSkinRenderList();
-            niTbSkinApply();
-            toastr?.success?.(`已导入「${skin.name}」`);
-        } catch (e) {
-            console.error('[NI] 导入皮肤失败', e);
-            toastr?.error?.(e?.message || '导入失败');
-        }
-    });
-
 
     // 全局提示词面板
     $app.on('click', '#ni-global-prompt-btn', () => niToggleGlobalPrompt());
