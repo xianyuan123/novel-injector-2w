@@ -7568,7 +7568,7 @@ jQuery(document).ready(function () {
     });
 
     $app.on('click', '#ni-tb-skin-clear', () => {
-        niTbSetSkin({ art: '', veil: 0, accent: '', title: '', text: '', barBg: '', cardBg: '', cardLine: '' });
+        niTbSetSkin({ art: '', veil: 0, accent: '', title: '', text: '', barBg: '', cardBg: '', cardLine: '', pad: null, forcePad: 0, radius: 16, cardH: 196, cardPad: 14 });
         niTbSyncSkinUI();
         const note = document.getElementById('ni-tb-skin-note');
         if (note) note.textContent = '已清除，回到主题配色。';

@@ -13,7 +13,8 @@ import {
     niTbSkinFromPalette,
     niTbContrast,
     niTbEnsureContrast,
-    niTbDetectPanelBox
+    niTbDetectPanelBox,
+    niTbMixWithWhite
 } from '../lib/transbook-skin.js';
 
 const PLUGIN_ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..';
@@ -104,5 +105,29 @@ ok(/ni-tb-skin-forcepad/.test(tpl), 'F11 设置页有「强制留边」滑条');
 ok(forceSkin.forcePad > 0 && /forcePad/.test(read('lib/transbook-bar.js')), 'F12 组件会用 forcePad');
 ok(/#ni-tb-skin-forcepad/.test(idx), 'F13 事件已接线');
 
+
+
+console.log('[G] 上传图后文字必须看得见');
+ok(niTbMixWithWhite('#000000', 0) === '#000000', 'G1 雾化 0 时底色不变');
+ok(niTbMixWithWhite('#000000', 1) === '#ffffff', 'G2 雾化 1 时底色变纯白');
+const darkPack = niTbSkinFromPalette({
+    dark: true,
+    avgHex: '#202030',
+    accent: '#8f63c9',
+    canvas: { barBg: '#242030', cardBg: '#2c2739', cardLine: '#3d3650', title: '#f2eef8', text: '#cfc7dd', veil: 0.75 }
+}, 'data:image/webp;base64,AA');
+ok(niTbContrast(darkPack.title, niTbMixWithWhite(darkPack.cardBg, darkPack.veil)) >= 7, 'G3 深色图 + 高雾化后标题仍看得清');
+ok(niTbContrast(darkPack.text, niTbMixWithWhite(darkPack.cardBg, darkPack.veil)) >= 4.5, 'G4 正文字色同样达标');
+const lightPack = niTbSkinFromPalette({
+    dark: false,
+    avgHex: '#f4f0f7',
+    accent: '#9d839f',
+    canvas: { barBg: '#ffffff', cardBg: '#ffffff', cardLine: '#e9e4f0', title: '#2a2436', text: '#5f576e', veil: 0.18 }
+}, 'data:image/webp;base64,AA');
+ok(niTbContrast(lightPack.title, '#ffffff') >= 7, 'G5 浅色图标题够黑');
+const barSrc = read('lib/transbook-bar.js');
+ok(/removeProperty\(k\)/.test(barSrc), 'G6 变量为空时会删掉旧的（关键：否则取消后还是旧颜色）');
+ok(/removeProperty\('--tb-art'\)/.test(barSrc), 'G7 没有底图时会清掉背景变量');
+ok(/pad: null, forcePad: 0/.test(read('index.js')), 'G8 清除按钮会连留边一起重置');
 
 console.log(`\n通过 ${pass} 条`);
