@@ -7536,6 +7536,28 @@ jQuery(document).ready(function () {
     const $app = typeof $ !== 'undefined' ? $(document.getElementById('ni-app') || document) : null;
 
     // ── 状态栏背景（皮肤）────────────────────────────────────────
+    const _niTbApplyOffset = () => {
+        const cfg = extension_settings[EXT_NAME] || {};
+        const skin = cfg.tbSkin || {};
+        const el = document.getElementById('ni-storybar');
+        if (!el) return;
+        el.style.setProperty('--ni-tb-dx', (Number(skin.dx) || 0) + 'px');
+        el.style.setProperty('--ni-tb-dy', (Number(skin.dy) || 0) + 'px');
+        el.style.setProperty('--ni-tb-dz', String((Number(skin.dz) || 100) / 100));
+    };
+    const _niTbOffsetRange = (sel, key, labelSel, suffix) => $app.on('input', sel, function () {
+        const cfg = extension_settings[EXT_NAME] || (extension_settings[EXT_NAME] = {});
+        const skin = cfg.tbSkin || (cfg.tbSkin = {});
+        skin[key] = Number(this.value);
+        _niTbApplyOffset();
+        const label = document.getElementById(labelSel);
+        if (label) label.textContent = this.value + (suffix || '');
+    });
+    _niTbOffsetRange('#ni-tb-skin-dx', 'dx', 'ni-tb-skin-dx-v');
+    _niTbOffsetRange('#ni-tb-skin-dy', 'dy', 'ni-tb-skin-dy-v');
+    _niTbOffsetRange('#ni-tb-skin-dz', 'dz', 'ni-tb-skin-dz-v', '%');
+    window.niTbApplyOffset = _niTbApplyOffset;
+
     $app.on('change', '.ni-tb-tune-item input', () => {
         try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
     });
