@@ -5479,11 +5479,11 @@ mark.ni-hl {
     white-space: nowrap;
 }
 :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-curtitle {
-    font-size: 2.95cqw; font-weight: 700; color: #6b45b8;
-    flex: 1 1 auto; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    text-shadow: 0 .2cqw .5cqw rgba(255,255,255,.85);
+    /* 卡片里已经有标题了，顶栏不再重复显示，只留 进行中 / 节点数 */
+    display: none;
 }
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-bar { justify-content: flex-start; }
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-meta { margin-left: auto; }
 :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-meta {
     font-size: 2.1cqw; color: #8a6fb8; white-space: nowrap;
     background: rgba(255,255,255,.66);
