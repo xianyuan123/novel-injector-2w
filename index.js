@@ -405,6 +405,7 @@ const DEFAULT_SETTINGS = {
     themeBorderless: false,
     themeCardless: false,
     themeStatusbarFollow: false,
+    tbStatusSkin: true,
     themeIconReplace: false,
     themeBackground: NI_THEME_DEFAULT.background,
     themeText: NI_THEME_DEFAULT.text,
@@ -6946,6 +6947,9 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
     });
     $app.on('change', '#ni-theme-icon-replace', function() {
         niThemeEditor.setIconReplace(this.checked);
+    });
+    $app.on('change', '#ni-tb-skin', function() {
+        niThemeEditor.setTbSkin(this.checked);
     });
     $app.on('click', '#ni-theme-import', () => q('#ni-theme-import-file')?.click());
     $app.on('change', '#ni-theme-import-file', function() {
