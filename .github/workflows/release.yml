@@ -76,8 +76,6 @@ jobs:
               "lib/story-data.js",
               "lib/timeline-system.js",
               "lib/transbook-system.js",
-  "lib/transbook-bar.js",
-  "lib/transbook-skin.js",
               "lib/ui-system.js",
               "lib/vector-system.js",
               "lib/world-system.js",

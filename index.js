@@ -2291,7 +2291,6 @@ const {
     niTbSaveState,
     niTbLoadState,
     niGetTbStoryBarHtml,
-    niTbSetSkin,
     niEsc,
     niTbBuildStageListHtml,
     niTbBuildNodePanelHtml,
@@ -7534,53 +7533,6 @@ jQuery(document).ready(function () {
 
     // 剧情页打开时初始化穿书模式 UI；保留设置页触发兼容旧布局
     const $app = typeof $ !== 'undefined' ? $(document.getElementById('ni-app') || document) : null;
-
-    // ── 状态栏背景（皮肤）────────────────────────────────────────
-    const _niTbApplyOffset = () => {
-        const cfg = extension_settings[EXT_NAME] || {};
-        const skin = cfg.tbSkin || {};
-        const el = document.getElementById('ni-storybar');
-        if (!el) return;
-        el.style.setProperty('--ni-tb-dx', (Number(skin.dx) || 0) + 'px');
-        el.style.setProperty('--ni-tb-dy', (Number(skin.dy) || 0) + 'px');
-        el.style.setProperty('--ni-tb-dz', String((Number(skin.dz) || 100) / 100));
-    };
-    const _niTbOffsetRange = (sel, key, labelSel, suffix) => $app.on('input', sel, function () {
-        const cfg = extension_settings[EXT_NAME] || (extension_settings[EXT_NAME] = {});
-        const skin = cfg.tbSkin || (cfg.tbSkin = {});
-        skin[key] = Number(this.value);
-        _niTbApplyOffset();
-        const label = document.getElementById(labelSel);
-        if (label) label.textContent = this.value + (suffix || '');
-    });
-    _niTbOffsetRange('#ni-tb-skin-dx', 'dx', 'ni-tb-skin-dx-v');
-    _niTbOffsetRange('#ni-tb-skin-dy', 'dy', 'ni-tb-skin-dy-v');
-    _niTbOffsetRange('#ni-tb-skin-dz', 'dz', 'ni-tb-skin-dz-v', '%');
-    window.niTbApplyOffset = _niTbApplyOffset;
-
-    $app.on('change', '.ni-tb-tune-item input', () => {
-        try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
-    });
-
-    function niTbSyncSkinUI() {
-        const cfg = extension_settings[EXT_NAME] || {};
-        const skin = cfg.tbSkin || {};
-        const set = (id, val) => { const el = document.getElementById(id); if (el && val != null && val !== '') el.value = val; };
-        set('ni-tb-skin-accent', skin.accent || '#c05a62');
-        set('ni-tb-skin-title', skin.title || '#2a2436');
-        set('ni-tb-skin-text', skin.text || '#5f576e');
-        const veilPct = Math.round((Number(skin.veil) || 0) * 100);
-        set('ni-tb-skin-veil', String(veilPct));
-        set('ni-tb-skin-radius', String(skin.radius ?? 16));
-        set('ni-tb-skin-cardh', String(skin.cardH ?? 196));
-        const lv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
-        lv('ni-tb-skin-veil-v', veilPct);
-        lv('ni-tb-skin-radius-v', skin.radius ?? 16);
-        lv('ni-tb-skin-cardh-v', skin.cardH ?? 196);
-    }
-    window.niTbSyncSkinUI = niTbSyncSkinUI;
-
-    $app.on('click', '.ni-nav-btn[data-page="settings"]', () => { setTimeout(niTbSyncSkinUI, 60); });
     if ($app) {
         $app.on('click', '.ni-nav-btn[data-page="plot"], .ni-nav-btn[data-page="settings"]', () => {
             setTimeout(() => niTbInitSettingsUI(), 50);
