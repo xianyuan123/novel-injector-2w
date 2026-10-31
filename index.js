@@ -7536,29 +7536,6 @@ jQuery(document).ready(function () {
     const $app = typeof $ !== 'undefined' ? $(document.getElementById('ni-app') || document) : null;
 
     // ── 状态栏背景（皮肤）────────────────────────────────────────
-    $app.on('change', '#ni-tb-bar-legacy', function () {
-        const cfg = extension_settings[EXT_NAME] || {};
-        cfg.tbBarLegacy = !!this.checked;
-        try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
-        try { niTbSyncStoryBar(niCreateTbSnapshot()); } catch (e) { console.warn('[NI] 切换状态栏版本失败:', e); }
-    });
-
-    const _niTbSkinColor = (sel, key) => $app.on('input', sel, function () {
-        niTbSetSkin({ [key]: this.value }, { persist: false });
-    });
-    _niTbSkinColor('#ni-tb-skin-accent', 'accent');
-    _niTbSkinColor('#ni-tb-skin-title', 'title');
-    _niTbSkinColor('#ni-tb-skin-text', 'text');
-
-    const _niTbSkinRange = (sel, key, labelSel, scale = 1) => $app.on('input', sel, function () {
-        const val = Number(this.value) * scale;
-        niTbSetSkin({ [key]: val }, { persist: false });
-        const label = document.getElementById(labelSel);
-        if (label) label.textContent = String(this.value);
-    });
-    _niTbSkinRange('#ni-tb-skin-veil', 'veil', 'ni-tb-skin-veil-v', 0.01);
-    _niTbSkinRange('#ni-tb-skin-radius', 'radius', 'ni-tb-skin-radius-v');
-    _niTbSkinRange('#ni-tb-skin-cardh', 'cardH', 'ni-tb-skin-cardh-v');
     $app.on('change', '.ni-tb-tune-item input', () => {
         try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
     });

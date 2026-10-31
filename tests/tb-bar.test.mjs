@@ -81,12 +81,18 @@ console.log('[E] 接线');
 const tb = readPlugin('lib/transbook-system.js');
 ok(tb.includes("from './transbook-bar.js'"), 'E1 组件已被系统引入');
 ok(tb.includes('niTbPaintStoryBar'), 'E2 有把 state 推给组件的绘制函数');
-ok(tb.includes('<ni-storybar id="ni-storybar"'), 'E3 niGetTbStoryBarHtml 返回组件宿主');
+ok(!tb.includes("return `<ni-storybar id=\"ni-storybar\""), 'E3 不再渲染组件宿主（统一旧版）');
 ok(tb.includes("addEventListener('ni-tb-act'"), 'E4 已监听组件的 ni-tb-act 事件');
-ok(tb.includes('cfg.tbBarLegacy') && tb.includes('niGetTbStoryBarHtmlLegacy'), 'E5 保留旧版渲染作回退');
+ok(tb.includes('return niGetTbStoryBarHtmlLegacy(snapshot);'), 'E5 直接返回旧版渲染');
 ok(tb.includes('function niTbById'), 'E6 元素查找会先 shadow 后 document');
 ok(tb.includes('_niTbShadow.appendChild(st)'), 'E7 插件样式复制进 shadow，面板不脱样式');
 const pkgFiles = JSON.parse(readPlugin('../_zip_files.json'));
 ok(pkgFiles.includes('lib/transbook-bar.js'), 'E8 打包清单里已登记');
+
+
+console.log('[F] 打开不卡死（防重入 + 样式只注入一次）');
+ok(/niTbPaintStoryBar\._busy/.test(tb), 'F1 重绘有防重入锁');
+ok(/niTbInjectShadowCss/.test(tb), 'F2 样式走独立的注入函数');
+ok(/css\.length > 120000/.test(tb), 'F3 超大样式改用 <link>，不再每帧复制文本');
 
 console.log(`\n通过 ${pass} 条`);
