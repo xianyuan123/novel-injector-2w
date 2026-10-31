@@ -5613,19 +5613,19 @@ mark.ni-hl {
 }
 :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sc-check {
     position: absolute; right: 3.4cqw; top: 3.4cqw;
-    width: 3cqw; height: 3cqw; border-radius: 50%;
-    background: rgba(255,255,255,.9);
-    box-shadow: inset 0 0 0 .2cqw rgba(185,140,240,.5);
+    width: 3.1cqw; height: 3.1cqw; border-radius: 50%;
+    box-sizing: border-box;
+    border: .28cqw solid rgba(176,132,214,.55);
+    background: rgba(255,255,255,.82);
+    box-shadow: 0 .2cqw .6cqw rgba(140,90,170,.12);
 }
-:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sc-check.on {
+/* 演过的节点：圆填满，不再打勾 */
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sc-check.checked {
     background: linear-gradient(180deg, #c9a3f5, #a97ce4);
-    box-shadow: inset 0 0 0 .2cqw rgba(255,255,255,.9);
+    border-color: rgba(255,255,255,.9);
+    box-shadow: inset 0 0 0 .2cqw rgba(255,255,255,.65), 0 .3cqw .8cqw rgba(140,90,170,.22);
 }
-:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sc-check::after {
-    content: '✓'; font-size: 1.8cqw; color: #9d7cc8;
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-}
-:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sc-check.on::after { color: #fff; }
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sc-check i { display: none !important; }
 
 /* 侧卡（上一张 / 下一张）：字号小一档，只留节点号、类型、标题 */
 :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-scard.side-prev,
