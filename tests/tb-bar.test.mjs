@@ -79,8 +79,14 @@ ok(src.includes('touch-action: pan-y'), 'D7 卡片纵向可滚、横向留给切
 ok(src.includes('--tb-art'), 'D8 底图走 CSS 变量');
 console.log('[E] 接线');
 const tb = readPlugin('lib/transbook-system.js');
-ok(!tb.includes('transbook-bar.js'), 'E1 目前还没接进系统（下一步做）');
+ok(tb.includes("from './transbook-bar.js'"), 'E1 组件已被系统引入');
+ok(tb.includes('niTbPaintStoryBar'), 'E2 有把 state 推给组件的绘制函数');
+ok(tb.includes('<ni-storybar id="ni-storybar"'), 'E3 niGetTbStoryBarHtml 返回组件宿主');
+ok(tb.includes("addEventListener('ni-tb-act'"), 'E4 已监听组件的 ni-tb-act 事件');
+ok(tb.includes('cfg.tbBarLegacy') && tb.includes('niGetTbStoryBarHtmlLegacy'), 'E5 保留旧版渲染作回退');
+ok(tb.includes('function niTbById'), 'E6 元素查找会先 shadow 后 document');
+ok(tb.includes('_niTbShadow.appendChild(st)'), 'E7 插件样式复制进 shadow，面板不脱样式');
 const pkgFiles = JSON.parse(readPlugin('../_zip_files.json'));
-ok(pkgFiles.includes('lib/transbook-bar.js'), 'E2 打包清单里已登记');
+ok(pkgFiles.includes('lib/transbook-bar.js'), 'E8 打包清单里已登记');
 
 console.log(`\n通过 ${pass} 条`);
