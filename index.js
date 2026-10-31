@@ -7590,6 +7590,12 @@ jQuery(document).ready(function () {
     _niTbSkinRange('#ni-tb-skin-veil', 'veil', 'ni-tb-skin-veil-v', 0.01);
     _niTbSkinRange('#ni-tb-skin-radius', 'radius', 'ni-tb-skin-radius-v');
     _niTbSkinRange('#ni-tb-skin-cardh', 'cardH', 'ni-tb-skin-cardh-v');
+    $app.on('input', '#ni-tb-skin-forcepad', function () {
+        const val = Number(this.value) || 0;
+        niTbSetSkin({ forcePad: val }, { persist: false });
+        const label = document.getElementById('ni-tb-skin-forcepad-v');
+        if (label) label.textContent = val > 0 ? val + '%' : '关';
+    });
 
     $app.on('change', '.ni-tb-tune-item input', () => {
         try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
@@ -7606,10 +7612,13 @@ jQuery(document).ready(function () {
         set('ni-tb-skin-veil', String(veilPct));
         set('ni-tb-skin-radius', String(skin.radius ?? 16));
         set('ni-tb-skin-cardh', String(skin.cardH ?? 196));
+        const forcePad = Number(skin.forcePad) || 0;
+        set('ni-tb-skin-forcepad', String(forcePad));
         const lv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
         lv('ni-tb-skin-veil-v', veilPct);
         lv('ni-tb-skin-radius-v', skin.radius ?? 16);
         lv('ni-tb-skin-cardh-v', skin.cardH ?? 196);
+        lv('ni-tb-skin-forcepad-v', forcePad > 0 ? forcePad + '%' : '关');
         const prev = document.getElementById('ni-tb-skin-preview');
         if (prev) {
             if (skin.art) {

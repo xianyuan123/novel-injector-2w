@@ -97,5 +97,12 @@ const skinWithPad = niTbNormalizeSkin({ pad: { t: 12.34, r: 9, b: 99, l: -5 } })
 ok(skinWithPad.pad && skinWithPad.pad.b <= 30 && skinWithPad.pad.l === 0 && skinWithPad.pad.t === 12.3,
    'F8 pad 会被规整并夹在 0~30');
 
+const forceSkin = niTbNormalizeSkin({ forcePad: 99 });
+ok(forceSkin.forcePad === 14, 'F9 forcePad 超过 14 被夹住');
+ok(niTbNormalizeSkin({}).forcePad === 0, 'F10 不给就是 0（自动）');
+ok(/ni-tb-skin-forcepad/.test(tpl), 'F11 设置页有「强制留边」滑条');
+ok(forceSkin.forcePad > 0 && /forcePad/.test(read('lib/transbook-bar.js')), 'F12 组件会用 forcePad');
+ok(/#ni-tb-skin-forcepad/.test(idx), 'F13 事件已接线');
+
 
 console.log(`\n通过 ${pass} 条`);
