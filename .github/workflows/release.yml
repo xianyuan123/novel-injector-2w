@@ -75,6 +75,7 @@ jobs:
               "lib/storage-system.js",
               "lib/story-data.js",
               "lib/timeline-system.js",
+              "lib/transbook-skin.js",
               "lib/transbook-system.js",
               "lib/ui-system.js",
               "lib/vector-system.js",
