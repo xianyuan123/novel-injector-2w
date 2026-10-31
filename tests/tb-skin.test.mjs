@@ -56,12 +56,9 @@ const tpl = read('template.html');
 ok(tb.includes("from './transbook-skin.js'"), 'D1 系统里引入了皮肤模块');
 ok(tb.includes('function niTbSetSkin'), 'D2 有 niTbSetSkin');
 ok(tb.includes('skin: niTbSkinFor(cfg)'), 'D3 state 里带上 skin');
-ok(idx.includes("'#ni-tb-skin-upload'"), 'D4 上传按钮有事件');
-ok(idx.includes('niTbFileToArt') && idx.includes('niTbPaletteFromPixels'), 'D5 上传后压缩 + 取色');
-ok(tpl.includes('id="ni-tb-skin-card"') && tpl.includes('id="ni-tb-skin-art"'), 'D6 设置页有这张卡和隐藏 input');
-ok(tpl.includes('id="ni-tb-skin-veil"') && tpl.includes('id="ni-tb-skin-cardh"'), 'D7 有雾化与卡片高滑条');
-ok(idx.includes('niTbSyncSkinUI'), 'D8 打开设置会同步皮肤 UI');
-ok(idx.includes("'#ni-tb-skin-clear'"), 'D9 有清除按钮');
+ok(!idx.includes("'#ni-tb-skin-upload'"), 'D4 不再有上传入口');
+ok(tpl.includes('id="ni-tb-skin-card"') && !tpl.includes('id="ni-tb-skin-art"'), 'D6 有外观卡、没有图片输入框');
+ok(!idx.includes("'#ni-tb-skin-clear'"), 'D9 不再有清除按钮');
 const pkg = JSON.parse(read('../_zip_files.json'));
 ok(pkg.includes('lib/transbook-skin.js'), 'D10 打包清单已登记');
 
@@ -101,9 +98,9 @@ ok(skinWithPad.pad && skinWithPad.pad.b <= 30 && skinWithPad.pad.l === 0 && skin
 const forceSkin = niTbNormalizeSkin({ forcePad: 99 });
 ok(forceSkin.forcePad === 14, 'F9 forcePad 超过 14 被夹住');
 ok(niTbNormalizeSkin({}).forcePad === 0, 'F10 不给就是 0（自动）');
-ok(/ni-tb-skin-forcepad/.test(tpl), 'F11 设置页有「强制留边」滑条');
+ok(!/ni-tb-skin-forcepad/.test(tpl), 'F11 不再有「强制留边」滑条');
 ok(forceSkin.forcePad > 0 && /forcePad/.test(read('lib/transbook-bar.js')), 'F12 组件会用 forcePad');
-ok(/#ni-tb-skin-forcepad/.test(idx), 'F13 事件已接线');
+ok(!/#ni-tb-skin-forcepad/.test(idx), 'F13 相关事件已删除');
 
 
 
@@ -128,6 +125,5 @@ ok(niTbContrast(lightPack.title, '#ffffff') >= 7, 'G5 浅色图标题够黑');
 const barSrc = read('lib/transbook-bar.js');
 ok(/removeProperty\(k\)/.test(barSrc), 'G6 变量为空时会删掉旧的（关键：否则取消后还是旧颜色）');
 ok(/removeProperty\('--tb-art'\)/.test(barSrc), 'G7 没有底图时会清掉背景变量');
-ok(/pad: null, forcePad: 0/.test(read('index.js')), 'G8 清除按钮会连留边一起重置');
 
 console.log(`\n通过 ${pass} 条`);

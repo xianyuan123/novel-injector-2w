@@ -1435,16 +1435,8 @@
 
       <!-- 4. 清除缓存-->
               <div class="ni-card" id="ni-tb-skin-card">
-          <div class="ni-ctitle"><i class="ti ti-photo"></i>状态栏背景</div>
-          <p class="ni-desc">上传一张图当状态栏底图，会自动取这张图的颜色来配文字和按钮；不想要了就点「清除」，回到主题配色。</p>
-          <div class="ni-tb-skin-row">
-            <div class="ni-tb-skin-preview" id="ni-tb-skin-preview"><span>未设置</span></div>
-            <div class="ni-tb-skin-ops">
-              <button class="ni-btn ni-btn-inline" id="ni-tb-skin-upload"><i class="ti ti-upload"></i>上传背景</button>
-              <button class="ni-btn ni-btn-inline" id="ni-tb-skin-clear"><i class="ti ti-eraser"></i>清除</button>
-              <input type="file" id="ni-tb-skin-art" accept="image/*" style="display:none">
-            </div>
-          </div>
+          <div class="ni-ctitle"><i class="ti ti-palette"></i>状态栏外观</div>
+          <p class="ni-desc">只改颜色和尺寸，不存任何图片，改完立刻生效。不想要了就在这里改回默认值。</p>
           <div class="ni-tb-skin-tune">
             <label class="ni-tb-tune-item">主色<input type="color" id="ni-tb-skin-accent" value="#c05a62"></label>
             <label class="ni-tb-tune-item">标题<input type="color" id="ni-tb-skin-title" value="#2a2436"></label>
@@ -1452,7 +1444,6 @@
             <label class="ni-tb-tune-item">雾化<input type="range" id="ni-tb-skin-veil" min="0" max="85" step="5" value="0"><span id="ni-tb-skin-veil-v">0</span></label>
             <label class="ni-tb-tune-item">圆角<input type="range" id="ni-tb-skin-radius" min="0" max="28" step="1" value="16"><span id="ni-tb-skin-radius-v">16</span></label>
             <label class="ni-tb-tune-item">卡片高<input type="range" id="ni-tb-skin-cardh" min="150" max="340" step="4" value="196"><span id="ni-tb-skin-cardh-v">196</span></label>
-            <label class="ni-tb-tune-item" title="满屏都是装饰、认不出面板区时，用它强制留一圈边；0 = 不强制">强制留边<input type="range" id="ni-tb-skin-forcepad" min="0" max="14" step="1" value="0"><span id="ni-tb-skin-forcepad-v">关</span></label>
           </div>
           <label class="ni-tb-tune-item ni-tb-legacy-row" title="新版状态栏万一卡顿或显示异常，勾上就回到重构前那套">
             <input type="checkbox" id="ni-tb-bar-legacy"> 用回旧版状态栏

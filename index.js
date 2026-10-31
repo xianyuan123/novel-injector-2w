@@ -7536,49 +7536,11 @@ jQuery(document).ready(function () {
     const $app = typeof $ !== 'undefined' ? $(document.getElementById('ni-app') || document) : null;
 
     // ── 状态栏背景（皮肤）────────────────────────────────────────
-    $app.on('click', '#ni-tb-skin-upload', () => {
-        document.getElementById('ni-tb-skin-art')?.click();
-    });
-
-    $app.on('change', '#ni-tb-skin-art', async function () {
-        const file = this.files?.[0];
-        this.value = '';
-        if (!file) return;
-        const note = document.getElementById('ni-tb-skin-note');
-        if (note) note.textContent = '正在处理图片…';
-        try {
-            const mod = await import('./lib/transbook-skin.js');
-            const art = await mod.niTbFileToArt(file);
-            const info = await mod.niTbSampleImageInfo(art, 64);
-            const palette = mod.niTbPaletteFromPixels(info.pixels);
-            const pad = mod.niTbDetectPanelBox(info.pixels, info.w, info.h, { aspect: info.aspect });
-            const skin = mod.niTbSkinFromPalette(palette, art);
-            if (pad && (pad.t > 1 || pad.l > 1 || pad.r > 1 || pad.b > 1)) skin.pad = pad;
-            niTbSetSkin(skin);
-            niTbSyncSkinUI();
-            if (note) {
-                note.textContent = pad
-                    ? `${palette?.dark ? '底图偏暗，已换成浅色字；' : ''}已按这张图取色，并认出面板区（内边距 上${pad.t}% 左右${pad.l}%）`
-                    : (palette?.dark ? '取到偏暗的底图，已自动换成浅色字。' : '已按这张图取色。不满意可以再微调下面几个。');
-            }
-        } catch (err) {
-            console.error('[NI] 状态栏背景处理失败:', err);
-            if (note) note.textContent = '这张图处理不了：' + (err?.message || err);
-        }
-    });
-
     $app.on('change', '#ni-tb-bar-legacy', function () {
         const cfg = extension_settings[EXT_NAME] || {};
         cfg.tbBarLegacy = !!this.checked;
         try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
         try { niTbSyncStoryBar(niCreateTbSnapshot()); } catch (e) { console.warn('[NI] 切换状态栏版本失败:', e); }
-    });
-
-    $app.on('click', '#ni-tb-skin-clear', () => {
-        niTbSetSkin({ art: '', veil: 0, accent: '', title: '', text: '', barBg: '', cardBg: '', cardLine: '', pad: null, forcePad: 0, radius: 16, cardH: 196, cardPad: 14 });
-        niTbSyncSkinUI();
-        const note = document.getElementById('ni-tb-skin-note');
-        if (note) note.textContent = '已清除，回到主题配色。';
     });
 
     const _niTbSkinColor = (sel, key) => $app.on('input', sel, function () {
@@ -7597,13 +7559,6 @@ jQuery(document).ready(function () {
     _niTbSkinRange('#ni-tb-skin-veil', 'veil', 'ni-tb-skin-veil-v', 0.01);
     _niTbSkinRange('#ni-tb-skin-radius', 'radius', 'ni-tb-skin-radius-v');
     _niTbSkinRange('#ni-tb-skin-cardh', 'cardH', 'ni-tb-skin-cardh-v');
-    $app.on('input', '#ni-tb-skin-forcepad', function () {
-        const val = Number(this.value) || 0;
-        niTbSetSkin({ forcePad: val }, { persist: false });
-        const label = document.getElementById('ni-tb-skin-forcepad-v');
-        if (label) label.textContent = val > 0 ? val + '%' : '关';
-    });
-
     $app.on('change', '.ni-tb-tune-item input', () => {
         try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
     });
@@ -7619,23 +7574,10 @@ jQuery(document).ready(function () {
         set('ni-tb-skin-veil', String(veilPct));
         set('ni-tb-skin-radius', String(skin.radius ?? 16));
         set('ni-tb-skin-cardh', String(skin.cardH ?? 196));
-        const forcePad = Number(skin.forcePad) || 0;
-        set('ni-tb-skin-forcepad', String(forcePad));
         const lv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
         lv('ni-tb-skin-veil-v', veilPct);
         lv('ni-tb-skin-radius-v', skin.radius ?? 16);
         lv('ni-tb-skin-cardh-v', skin.cardH ?? 196);
-        lv('ni-tb-skin-forcepad-v', forcePad > 0 ? forcePad + '%' : '关');
-        const prev = document.getElementById('ni-tb-skin-preview');
-        if (prev) {
-            if (skin.art) {
-                prev.style.backgroundImage = `url("${skin.art}")`;
-                prev.innerHTML = '';
-            } else {
-                prev.style.backgroundImage = '';
-                prev.innerHTML = '<span>未设置</span>';
-            }
-        }
     }
     window.niTbSyncSkinUI = niTbSyncSkinUI;
 
