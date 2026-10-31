@@ -5516,3 +5516,24 @@ mark.ni-hl {
 :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-off-title { font-size: 11.5px; color: #8b7a98; }
 :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-off-run { border: 1px solid rgba(255,255,255,.98); background: rgba(255,255,255,.88);
     color: #7b6489; font-size: 10.5px; border-radius: 20px; }
+
+/* ── 性能补丁：皮肤的毛玻璃/大阴影在长聊天里会拖慢滚动，这里降级成廉价版本 ── */
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) {
+    filter: none !important;
+    box-shadow: 0 8px 18px -10px rgba(150, 110, 150, .20) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-carousel-wrap { touch-action: pan-y; }
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-track { will-change: transform; }
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-scard {
+    will-change: auto !important;
+    transition-duration: .2s !important;
+}
+:is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-btn-free, :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-btn-pause, :is(.ni-tb-shell.ni-tb-skin):has(.ni-tb-body.open) .ni-tb-sel-btn {
+    transition-duration: .12s !important;
+}
