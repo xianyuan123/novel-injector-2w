@@ -7549,14 +7549,18 @@ jQuery(document).ready(function () {
         try {
             const mod = await import('./lib/transbook-skin.js');
             const art = await mod.niTbFileToArt(file);
-            const pixels = await mod.niTbSampleImage(art);
-            const palette = mod.niTbPaletteFromPixels(pixels);
+            const info = await mod.niTbSampleImageInfo(art, 64);
+            const palette = mod.niTbPaletteFromPixels(info.pixels);
+            const pad = mod.niTbDetectPanelBox(info.pixels, info.w, info.h, { aspect: info.aspect });
             const skin = mod.niTbSkinFromPalette(palette, art);
+            if (pad && (pad.t > 1 || pad.l > 1 || pad.r > 1 || pad.b > 1)) skin.pad = pad;
             niTbSetSkin(skin);
             niTbSyncSkinUI();
-            if (note) note.textContent = palette?.dark
-                ? '取到偏暗的底图，已自动换成浅色字。'
-                : '已按这张图取色。不满意可以再微调下面几个。';
+            if (note) {
+                note.textContent = pad
+                    ? `${palette?.dark ? '底图偏暗，已换成浅色字；' : ''}已按这张图取色，并认出面板区（内边距 上${pad.t}% 左右${pad.l}%）`
+                    : (palette?.dark ? '取到偏暗的底图，已自动换成浅色字。' : '已按这张图取色。不满意可以再微调下面几个。');
+            }
         } catch (err) {
             console.error('[NI] 状态栏背景处理失败:', err);
             if (note) note.textContent = '这张图处理不了：' + (err?.message || err);

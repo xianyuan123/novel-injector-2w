@@ -10,7 +10,10 @@ import {
     niTbRgbToHex,
     niTbLuminance,
     niTbPaletteFromPixels,
-    niTbSkinFromPalette
+    niTbSkinFromPalette,
+    niTbContrast,
+    niTbEnsureContrast,
+    niTbDetectPanelBox
 } from '../lib/transbook-skin.js';
 
 const PLUGIN_ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..';
@@ -60,5 +63,39 @@ ok(idx.includes('niTbSyncSkinUI'), 'D8 打开设置会同步皮肤 UI');
 ok(idx.includes("'#ni-tb-skin-clear'"), 'D9 有清除按钮');
 const pkg = JSON.parse(read('../_zip_files.json'));
 ok(pkg.includes('lib/transbook-skin.js'), 'D10 打包清单已登记');
+
+console.log('[E] 对比度兜底');
+ok(niTbContrast('#000000', '#ffffff') > 20, 'E1 黑白对比度接近 21');
+const paleAccent = niTbEnsureContrast('#efc8f4', '#ffffff', 3.2);
+ok(niTbContrast(paleAccent, '#ffffff') >= 3.2, 'E2 浅粉被压暗到看得清');
+ok(paleAccent !== '#efc8f4', 'E3 确实改动过颜色');
+const deepAccent = niTbEnsureContrast('#202030', '#242030', 3);
+ok(niTbContrast(deepAccent, '#242030') >= 3, 'E4 深底上会提亮主色');
+ok(niTbEnsureContrast('#8f63c9', '#ffffff', 3.2) === '#8f63c9', 'E5 本来就够的不乱动');
+
+console.log('[F] 面板区识别');
+const grid = (w, h, fn) => {
+    const out = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out.push(fn(x, y));
+    return out;
+};
+// 40×40 的图，中间 20×16 是浅色面板，四周是深色装饰
+const plate = grid(40, 40, (x, y) => (
+    x >= 10 && x < 30 && y >= 12 && y < 28 ? [246, 243, 250] : [70, 50, 90]
+));
+const box = niTbDetectPanelBox(plate, 40, 40, { aspect: 1 });
+ok(box && box.l >= 20 && box.l <= 30, `F1 左边留边 ≈25%（实测 ${box && box.l}）`);
+ok(box && box.r >= 20 && box.r <= 30, `F2 右边留边 ≈25%（实测 ${box && box.r}）`);
+ok(box && box.t >= 25 && box.t <= 35, `F3 上边留边 ≈30%（实测 ${box && box.t}）`);
+ok(box && box.b >= 25 && box.b <= 35, `F4 下边留边 ≈30%（实测 ${box && box.b}）`);
+ok(niTbDetectPanelBox(grid(20, 20, () => [10, 10, 10]), 20, 20) === null, 'F5 全深色图认不出面板就返回 null');
+ok(niTbDetectPanelBox(grid(20, 20, () => [250, 250, 250]), 20, 20) === null, 'F6 全浅色图也不乱给留边');
+const wide = grid(60, 30, (x, y) => (x >= 6 && x < 54 && y >= 4 && y < 26 ? [250, 250, 252] : [40, 40, 40]));
+const wbox = niTbDetectPanelBox(wide, 60, 30, { aspect: 0.5 });
+ok(wbox && wbox.t >= 4 && wbox.t <= 12, `F7 按高宽比换算上下留边（实测 ${wbox && wbox.t}）`);
+const skinWithPad = niTbNormalizeSkin({ pad: { t: 12.34, r: 9, b: 99, l: -5 } });
+ok(skinWithPad.pad && skinWithPad.pad.b <= 30 && skinWithPad.pad.l === 0 && skinWithPad.pad.t === 12.3,
+   'F8 pad 会被规整并夹在 0~30');
+
 
 console.log(`\n通过 ${pass} 条`);
