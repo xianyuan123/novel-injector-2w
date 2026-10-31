@@ -20,6 +20,11 @@ ok(css.includes('container-type: inline-size') && /\.ni-tb-bar \{[^}]*cqw/.test(
 ok(css.includes('.ni-tb-drop-panel') && /position: absolute;\s*left: 8\.8cqw/.test(css), 'A7 选择面板改成盖在卡片上的浮层');
 ok(css.includes('background: var(--ni-tb-plate) center / 100% 100% no-repeat'), 'A8 底图整张铺满（不重复、不裁切）');
 
+ok(css.includes('width: 89.2cqw'), 'A9 轮播容器留出下一张的边（能看见下一节点）');
+ok(!css.includes('.ni-tb-scard:not(.active) { display: none; }'), 'A10 侧卡没有被隐藏，轮播照常渲染');
+ok(tb.includes('niTbSyncCardMetrics') && tb.includes('TB_SKIN'), 'A11 卡片尺寸随皮肤等比放大（布局逻辑不变）');
+ok(tb.includes('function niTbBindSwipe') && tb.includes('niTbBindSwipe();'), 'A12 加了左右滑动切换节点');
+
 console.log('[B] 开关接线');
 ok(/const skinClass = cfg\.tbStatusSkin !== false \? ' ni-tb-skin' : '';/.test(tb), 'B1 外壳按设置加 ni-tb-skin');
 ok(tb.includes('${themeFollowClass}${skinClass}'), 'B2 class 拼进外壳');
