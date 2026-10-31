@@ -2291,6 +2291,7 @@ const {
     niTbSaveState,
     niTbLoadState,
     niGetTbStoryBarHtml,
+    niTbSetSkin,
     niEsc,
     niTbBuildStageListHtml,
     niTbBuildNodePanelHtml,
@@ -7533,6 +7534,92 @@ jQuery(document).ready(function () {
 
     // 剧情页打开时初始化穿书模式 UI；保留设置页触发兼容旧布局
     const $app = typeof $ !== 'undefined' ? $(document.getElementById('ni-app') || document) : null;
+
+    // ── 状态栏背景（皮肤）────────────────────────────────────────
+    $app.on('click', '#ni-tb-skin-upload', () => {
+        document.getElementById('ni-tb-skin-art')?.click();
+    });
+
+    $app.on('change', '#ni-tb-skin-art', async function () {
+        const file = this.files?.[0];
+        this.value = '';
+        if (!file) return;
+        const note = document.getElementById('ni-tb-skin-note');
+        if (note) note.textContent = '正在处理图片…';
+        try {
+            const mod = await import('./lib/transbook-skin.js');
+            const art = await mod.niTbFileToArt(file);
+            const pixels = await mod.niTbSampleImage(art);
+            const palette = mod.niTbPaletteFromPixels(pixels);
+            const skin = mod.niTbSkinFromPalette(palette, art);
+            niTbSetSkin(skin);
+            niTbSyncSkinUI();
+            if (note) note.textContent = palette?.dark
+                ? '取到偏暗的底图，已自动换成浅色字。'
+                : '已按这张图取色。不满意可以再微调下面几个。';
+        } catch (err) {
+            console.error('[NI] 状态栏背景处理失败:', err);
+            if (note) note.textContent = '这张图处理不了：' + (err?.message || err);
+        }
+    });
+
+    $app.on('click', '#ni-tb-skin-clear', () => {
+        niTbSetSkin({ art: '', veil: 0, accent: '', title: '', text: '', barBg: '', cardBg: '', cardLine: '' });
+        niTbSyncSkinUI();
+        const note = document.getElementById('ni-tb-skin-note');
+        if (note) note.textContent = '已清除，回到主题配色。';
+    });
+
+    const _niTbSkinColor = (sel, key) => $app.on('input', sel, function () {
+        niTbSetSkin({ [key]: this.value }, { persist: false });
+    });
+    _niTbSkinColor('#ni-tb-skin-accent', 'accent');
+    _niTbSkinColor('#ni-tb-skin-title', 'title');
+    _niTbSkinColor('#ni-tb-skin-text', 'text');
+
+    const _niTbSkinRange = (sel, key, labelSel, scale = 1) => $app.on('input', sel, function () {
+        const val = Number(this.value) * scale;
+        niTbSetSkin({ [key]: val }, { persist: false });
+        const label = document.getElementById(labelSel);
+        if (label) label.textContent = String(this.value);
+    });
+    _niTbSkinRange('#ni-tb-skin-veil', 'veil', 'ni-tb-skin-veil-v', 0.01);
+    _niTbSkinRange('#ni-tb-skin-radius', 'radius', 'ni-tb-skin-radius-v');
+    _niTbSkinRange('#ni-tb-skin-cardh', 'cardH', 'ni-tb-skin-cardh-v');
+
+    $app.on('change', '.ni-tb-tune-item input', () => {
+        try { niSaveSettingsDebounced?.(); } catch { /* 忽略 */ }
+    });
+
+    function niTbSyncSkinUI() {
+        const cfg = extension_settings[EXT_NAME] || {};
+        const skin = cfg.tbSkin || {};
+        const set = (id, val) => { const el = document.getElementById(id); if (el && val != null && val !== '') el.value = val; };
+        set('ni-tb-skin-accent', skin.accent || '#c05a62');
+        set('ni-tb-skin-title', skin.title || '#2a2436');
+        set('ni-tb-skin-text', skin.text || '#5f576e');
+        const veilPct = Math.round((Number(skin.veil) || 0) * 100);
+        set('ni-tb-skin-veil', String(veilPct));
+        set('ni-tb-skin-radius', String(skin.radius ?? 16));
+        set('ni-tb-skin-cardh', String(skin.cardH ?? 196));
+        const lv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+        lv('ni-tb-skin-veil-v', veilPct);
+        lv('ni-tb-skin-radius-v', skin.radius ?? 16);
+        lv('ni-tb-skin-cardh-v', skin.cardH ?? 196);
+        const prev = document.getElementById('ni-tb-skin-preview');
+        if (prev) {
+            if (skin.art) {
+                prev.style.backgroundImage = `url("${skin.art}")`;
+                prev.innerHTML = '';
+            } else {
+                prev.style.backgroundImage = '';
+                prev.innerHTML = '<span>未设置</span>';
+            }
+        }
+    }
+    window.niTbSyncSkinUI = niTbSyncSkinUI;
+
+    $app.on('click', '.ni-nav-btn[data-page="settings"]', () => { setTimeout(niTbSyncSkinUI, 60); });
     if ($app) {
         $app.on('click', '.ni-nav-btn[data-page="plot"], .ni-nav-btn[data-page="settings"]', () => {
             setTimeout(() => niTbInitSettingsUI(), 50);

@@ -5427,3 +5427,21 @@ mark.ni-hl {
     font-size: 12px;
     white-space: nowrap;
 }
+
+
+/* ── 状态栏背景（皮肤）卡 ── */
+.ni-tb-skin-row { display: flex; align-items: center; gap: 10px; }
+.ni-tb-skin-preview {
+    width: 108px; height: 62px; border-radius: 10px; flex: 0 0 auto;
+    border: 0.5px solid var(--color-border-tertiary, #e8e8ec);
+    background: var(--color-background-secondary, #f7f7f8) center / cover no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--color-text-tertiary, #9a9aaa);
+}
+.ni-tb-skin-ops { display: flex; flex-direction: column; gap: 6px; }
+.ni-tb-skin-tune { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 10px; }
+.ni-tb-tune-item { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--color-text-secondary, #666); }
+.ni-tb-tune-item input[type="color"] { width: 100%; height: 26px; padding: 0; border: 0.5px solid var(--color-border-tertiary, #e8e8ec); border-radius: 7px; background: none; }
+.ni-tb-tune-item input[type="range"] { width: 100%; accent-color: var(--ni-primary, #A0445E); }
+.ni-tb-tune-item span { font-variant-numeric: tabular-nums; color: var(--color-text-tertiary, #9a9aaa); }
+.ni-tb-skin-note { margin-top: 8px; font-size: 11px; color: var(--color-text-tertiary, #9a9aaa); min-height: 14px; }
