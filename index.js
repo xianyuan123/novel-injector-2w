@@ -4906,6 +4906,10 @@ function niCloseIssueModal() {
 // ── 撤销：只给「删了就没了」的操作留后悔窗口 ──────────────
 function niOfferUndo(text, restore, duration = 30000) {
     if (typeof restore !== 'function') return;
+    // 设置里关掉「删除时显示撤销条」就完全不弹（删除照常生效）
+    try {
+        if (extension_settings?.[EXT_NAME]?.tbUndoBar === false) return;
+    } catch (e) { /* 读不到设置就按默认显示 */ }
     try {
         niShowUndoBar({ text, duration, onUndo: restore });
     } catch (e) {
@@ -7411,8 +7415,19 @@ jQuery(document).ready(function () {
             let raw = '';
             const startedAt = Date.now();
             try {
-                if ((cfg.tbAutoAdvanceModel || 'current') === 'plugin') {
+                const advMode = cfg.tbAutoAdvanceModel || 'current';
+                if (advMode === 'plugin') {
                     raw = await callCleanApi(messages, {});
+                } else if (advMode === 'separate') {
+                    // 单独接口：判定走自己的地址/密钥/模型，留空的项沿用清洗配置
+                    const advCfg = {
+                        ...cfg,
+                        cleanUrl: cfg.tbAdvanceUrl || cfg.cleanUrl,
+                        cleanKey: cfg.tbAdvanceKey || cfg.cleanKey,
+                        cleanModel: cfg.tbAdvanceModel || cfg.cleanModel,
+                        cleanStream: true,
+                    };
+                    raw = await callCleanApi(messages, { prepared: true, requestSettings: advCfg });
                 } else {
                     raw = await niGenerateWithTavernMainPreset(messages, { responseLength: 200 });
                 }

@@ -702,6 +702,18 @@
           <div class="ni-field" style="margin-top:10px;margin-bottom:0">
             <div style="display:flex;align-items:center;justify-content:space-between">
               <label style="display:flex;align-items:center;gap:5px">
+                <i class="ti ti-arrow-back-up" style="font-size:12px"></i>删除时显示撤销条
+                <span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">关掉后删除直接生效</span>
+              </label>
+              <label class="ni-toggle-wrap">
+                <input type="checkbox" id="ni-tb-undo-bar">
+                <span class="ni-cfg-chk"><i class="ti ti-check"></i></span>
+              </label>
+            </div>
+          </div>
+          <div class="ni-field" style="margin-top:10px;margin-bottom:0">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <label style="display:flex;align-items:center;gap:5px">
                 <i class="ti ti-eye" style="font-size:12px"></i>沉浸
                 <span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">仅写 &lt;user&gt; 已知信息</span>
               </label>
@@ -748,8 +760,23 @@
                 <label>判定模型</label>
                 <select id="ni-tb-auto-advance-model">
                   <option value="current">当前对话模型</option>
-                  <option value="plugin">插件里配置的 API</option>
+                  <option value="plugin">插件里配置的 API（清洗用）</option>
+                  <option value="separate">单独配置一个接口</option>
                 </select>
+              </div>
+              <div id="ni-tb-adv-sep" style="display:none;width:100%;gap:8px;flex-wrap:wrap;margin-top:4px">
+                <div class="ni-field" style="margin-bottom:0;flex:1;min-width:150px">
+                  <label>接口地址（留空＝沿用清洗接口）</label>
+                  <input type="text" id="ni-tb-adv-url" placeholder="https://api.example.com/v1">
+                </div>
+                <div class="ni-field" style="margin-bottom:0;flex:1;min-width:150px">
+                  <label>API Key（留空＝沿用清洗密钥）</label>
+                  <input type="password" id="ni-tb-adv-key" placeholder="sk-...">
+                </div>
+                <div class="ni-field" style="margin-bottom:0;width:180px">
+                  <label>模型名</label>
+                  <input type="text" id="ni-tb-adv-model" placeholder="gpt-4o-mini">
+                </div>
               </div>
               <div class="ni-field" style="margin-bottom:0;width:118px">
                 <label>每 N 条回复判定</label>
