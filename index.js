@@ -4908,11 +4908,12 @@ function niUndoBarEnabled() {
     let v;
     try { v = extension_settings?.[EXT_NAME]?.tbUndoBar; } catch (e) { v = undefined; }
     if (v === false) return false;
-    // 设置值还没写进 extension_settings（旧配置 / 刚装）时，退回到看界面上的勾选框
+    // 设置值还没写进 extension_settings（旧配置 / 刚装）时，退回到看界面上的勾选框：
+    // 勾上 = 已隐藏
     if (v === undefined) {
         try {
             const chk = document.getElementById('ni-tb-undo-bar');
-            if (chk && chk.checked === false) return false;
+            if (chk && chk.checked === true) return false;
         } catch (e) { /* ignore */ }
     }
     return true;
@@ -4920,7 +4921,7 @@ function niUndoBarEnabled() {
 
 function niOfferUndo(text, restore, duration = 30000) {
     if (typeof restore !== 'function') return;
-    // 设置里关掉「删除时显示撤销条」就完全不弹（删除照常生效）
+    // 勾了「隐藏撤销条」就完全不弹（删除照常生效）
     if (!niUndoBarEnabled()) return;
     try {
         niShowUndoBar({ text, duration, onUndo: restore });
