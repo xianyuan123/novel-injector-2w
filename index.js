@@ -4904,12 +4904,24 @@ function niCloseIssueModal() {
 }
 
 // ── 撤销：只给「删了就没了」的操作留后悔窗口 ──────────────
+function niUndoBarEnabled() {
+    let v;
+    try { v = extension_settings?.[EXT_NAME]?.tbUndoBar; } catch (e) { v = undefined; }
+    if (v === false) return false;
+    // 设置值还没写进 extension_settings（旧配置 / 刚装）时，退回到看界面上的勾选框
+    if (v === undefined) {
+        try {
+            const chk = document.getElementById('ni-tb-undo-bar');
+            if (chk && chk.checked === false) return false;
+        } catch (e) { /* ignore */ }
+    }
+    return true;
+}
+
 function niOfferUndo(text, restore, duration = 30000) {
     if (typeof restore !== 'function') return;
     // 设置里关掉「删除时显示撤销条」就完全不弹（删除照常生效）
-    try {
-        if (extension_settings?.[EXT_NAME]?.tbUndoBar === false) return;
-    } catch (e) { /* 读不到设置就按默认显示 */ }
+    if (!niUndoBarEnabled()) return;
     try {
         niShowUndoBar({ text, duration, onUndo: restore });
     } catch (e) {
