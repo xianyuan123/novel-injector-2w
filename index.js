@@ -2002,6 +2002,7 @@ const {
     niSlotColor,
     niUpdateSpHint,
     niAutoStageByPivot,
+    niAutoStageBySize,
     niConfirmStageMap,
     niSetCurrentPlotTab,
     niGetCurrentPlotTab,
@@ -6471,6 +6472,12 @@ $app.on('click', '#ni-inj-preview-open', (ev) => {
 
     // 阶段划分面板按钮
     $app.on('click', '#ni-stage-map-btn', () => niOpenStagePanel());
+    $app.on('click', '#ni-sp-size-btn', () => niAutoStageBySize());
+    $app.on('keydown', '#ni-sp-stage-count, #ni-sp-stage-size', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        niAutoStageBySize();
+    });
     $app.on('click', '#ni-sp-ai-btn',     () => niAutoStageByPivot());
     $app.on('click', '.ni-sp-add-btn',    () => niAddStageSlot());
     $app.on('click', '.ni-sp-cancel-btn', () => niCloseStagePanel());

@@ -901,6 +901,21 @@
               </button>
             </div>
           </div>
+          <div class="ni-sp-size-row" id="ni-sp-size-row">
+            <span class="ni-sp-size-label">自动分段</span>
+            <label class="ni-sp-size-field">
+              <input type="number" id="ni-sp-stage-count" min="1" max="200" step="1" value="5" inputmode="numeric">
+              <span>个阶段</span>
+            </label>
+            <span class="ni-sp-size-x">×</span>
+            <label class="ni-sp-size-field">
+              <input type="number" id="ni-sp-stage-size" min="1" max="500" step="1" value="5" inputmode="numeric">
+              <span>个节点</span>
+            </label>
+            <button class="ni-sp-size-btn" id="ni-sp-size-btn" title="按顺序每 N 个节点切一段，不管转折点；最后不足的并进最后一段">
+              <i class="ti ti-cut"></i>开始分段
+            </button>
+          </div>
           <div class="ni-stage-panel-footer">
             <span class="ni-sp-hint" id="ni-sp-hint">请先建立阶段，再勾选节点归入</span>
             <div style="display:flex;gap:6px">
