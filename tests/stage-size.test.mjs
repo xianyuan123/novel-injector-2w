@@ -51,6 +51,11 @@ check('A9 切出来的段数不超过阶段数', () => {
     }
 });
 
+check('A10 阶段数留空（0）+ 每段 4 → 按总量算段数', () => {
+    assert.deepEqual(niSplitStageSizes(10, 0, 4), [4, 4, 2]);
+    assert.deepEqual(niSplitStageSizes(24, 0, 5), [5, 5, 5, 5, 4]);
+});
+
 console.log('[B] 面板与接线');
 check('B1 模板里有「自动分段」这一行和两个输入框', () => {
     const tpl = read('template.html');
@@ -93,6 +98,13 @@ check('B7 样式表有分段设置行', () => {
     const css = read('style.css');
     assert.ok(css.includes('.ni-sp-size-row {'));
     assert.ok(css.includes('.ni-sp-size-btn {'));
+});
+
+check('B8 阶段数留空时不会被强行当成 1 段', () => {
+    const src = read('lib/story-data.js');
+    const seg = src.slice(src.indexOf('async function niAutoStageBySize'));
+    assert.ok(seg.slice(0, 900).includes('Math.max(0, parseInt('), '阶段数应允许 0=未填');
+    assert.ok(!seg.slice(0, 900).includes('Math.max(1, parseInt(countEl'), '不能把空值当 1 段');
 });
 
 console.log(`\n通过 ${pass}，失败 ${fail}`);
