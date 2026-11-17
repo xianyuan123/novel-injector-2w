@@ -326,7 +326,7 @@ check('F6 当前阶段从「正在演的节点」之后开始取，不重复发�
     assert.equal(preview.nodeCount, rest.length);
     rest.forEach(title => assert.ok(preview.content.includes(title)));
 });
-check('F7 不知道演到哪个节点时，从当前阶段第一个节点开始（且全部发）', () => {
+check('F7 不知道演到哪个节点时，从当前阶段第一个节点开始，只发 N 个', () => {
     const preview = niBuildFuturePlotPreview({
         stageIndices: [9],
         nodesByStage: NODES,
@@ -336,9 +336,10 @@ check('F7 不知道演到哪个节点时，从当前阶段第一个节点开始�
     });
     const all = niMergeStageNodes(NODES[9]);
     const first = all[0].title;
-    // 「每阶段几个节点」只约束往后的阶段，当前阶段剩下的节点要全部发出去。
-    assert.equal(preview.nodeCount, all.length);
+    // 现在当前阶段和其它阶段一样受「每阶段 N 个」约束。
+    assert.equal(preview.nodeCount, 1);
     assert.ok(preview.content.includes(first));
+    assert.ok(!preview.content.includes(all[1].title), '第二个节点不该发');
 });
 check('F8 锚点节点找不到时跳过当前阶段，不把已演过的节点当预告重发', () => {
     const preview = niBuildFuturePlotPreview({
@@ -368,7 +369,7 @@ check('F8b 锚点失效只影响当前阶段，后面的阶段照发', () => {
     assert.deepEqual(preview.stageIndices, [10]);
     assert.equal(preview.anchorMissing, true);
 });
-check('F9 「每阶段几个节点」不再截断当前阶段', () => {
+check('F9 「每阶段几个节点」同样约束当前阶段（节点2之后只发 N 个）', () => {
     const preview = niBuildFuturePlotPreview({
         stageIndices: [9],
         nodesByStage: NODES,
@@ -377,8 +378,11 @@ check('F9 「每阶段几个节点」不再截断当前阶段', () => {
         currentStageIdx: 9,
         startAfterNodeId: 'n9a',
     });
-    // 以前这里会被 nodesPerStage 截成 1 个，等于本阶段剩下的还没发完就轮到下一阶段。
-    assert.equal(preview.nodeCount, niMergeStageNodes(NODES[9]).length - 1);
+    // 演到节点 1 之后，从节点 2 起只发 1 个（也就是节点 2）。
+    assert.equal(preview.nodeCount, 1);
+    const titles = niMergeStageNodes(NODES[9]).map(plot => plot.title);
+    assert.ok(preview.content.includes(titles[1]));
+    assert.ok(!preview.content.includes(titles[2]));
 });
 check('F10 后面阶段不受「当前阶段」逻辑影响', () => {
     const preview = niBuildFuturePlotPreview({
@@ -424,56 +428,54 @@ const wideStage = (stageIdx, count, bodyLen = 8) => ({
 const WIDE = { 12: wideStage(12, 8), 13: wideStage(13, 6) };
 const WIDE_LONG = { 12: wideStage(12, 8, 130), 13: wideStage(13, 6, 130) };
 
-check('G1 当前阶段 8 个节点、每阶段设 4 → 当前阶段 8 个全发，后面阶段仍取 4 个', () => {
-    const preview = niBuildFuturePlotPreview({
-        stageIndices: [12, 13],
-        nodesByStage: WIDE,
-        nodesPerStage: 4,
-        maxTokens: 32000,
-        currentStageIdx: 12,
-    });
-    assert.equal(preview.sections[0].lines.length, 8, '当前阶段不能被「每阶段 4 个」截断');
-    assert.equal(preview.sections[1].lines.length, 4, '后面的阶段照旧取前 N 个');
-    assert.equal(preview.nodeCount, 12);
-    assert.equal(preview.nodesPerStage, 4);
-    assert.equal(preview.currentStageNodesPerStage, 0);
-    assert.equal(preview.truncated, false);
-});
-
-check('G2 预算不够时先保住当前阶段，后面的阶段整段不发', () => {
-    const base = {
-        nodesByStage: WIDE_LONG,
-        nodesPerStage: 4,
-        currentStageIdx: 12,
-        startAfterNodeId: 'w12-1',
-    };
-    const currentOnly = niBuildFuturePlotPreview({ ...base, stageIndices: [12], maxTokens: 32000 });
-    const tokens = Math.ceil((currentOnly.text.length + 12) / 1.5);
-    const preview = niBuildFuturePlotPreview({ ...base, stageIndices: [12, 13], maxTokens: tokens });
-    assert.equal(preview.sections.length, 1);
-    assert.deepEqual(preview.stageIndices, [12]);
-    assert.equal(preview.truncated, true);
-    assert.equal(preview.sections[0].lines.length, 7, '当前阶段剩下的 7 个节点先发完');
-});
-
-check('G3 仍可显式限制当前阶段（currentStageNodesPerStage）', () => {
+check('G1 演到节点 2、每阶段设 2 → 只发节点 3 和 4', () => {
     const preview = niBuildFuturePlotPreview({
         stageIndices: [12],
         nodesByStage: WIDE,
-        nodesPerStage: 4,
-        currentStageNodesPerStage: 2,
+        nodesPerStage: 2,
         maxTokens: 32000,
         currentStageIdx: 12,
-        startAfterNodeId: 'w12-1',
+        startAfterNodeId: 'w12-2',
     });
-    assert.equal(preview.sections[0].lines.length, 2);
-    assert.equal(preview.currentStageNodesPerStage, 2);
+    assert.equal(preview.sections[0].lines.length, 2, '当前阶段也只取 2 个');
+    assert.ok(preview.content.includes('节点12-3'));
+    assert.ok(preview.content.includes('节点12-4'));
+    assert.ok(!preview.content.includes('节点12-5'), '第 5 个不该发');
+    assert.equal(preview.nodeCount, 2);
+    assert.equal(preview.nodesPerStage, 2);
+    assert.equal(preview.truncated, false);
 });
 
-check('G4 接线：payload 传 0、面板文案说明只约束后面阶段', () => {
-    assert.ok(indexSrc.includes('currentStageNodesPerStage: 0'), 'payload 没把当前阶段设成全部');
-    assert.ok(indexSrc.includes('阶段剩下的全部节点（优先）'), '说明文案没写当前阶段优先');
-    assert.ok(templateSrc.includes('往后每阶段'), '输入框标签没说明只约束后面的阶段');
+check('G2 后面阶段同样各取 2 个', () => {
+    const preview = niBuildFuturePlotPreview({
+        stageIndices: [12, 13],
+        nodesByStage: WIDE,
+        nodesPerStage: 2,
+        maxTokens: 32000,
+        currentStageIdx: 12,
+        startAfterNodeId: 'w12-2',
+    });
+    assert.equal(preview.sections[0].lines.length, 2);
+    assert.equal(preview.sections[1].lines.length, 2);
+    assert.equal(preview.nodeCount, 4);
+});
+
+check('G3 「每阶段 0 个」= 该阶段全部节点（含当前阶段）', () => {
+    const preview = niBuildFuturePlotPreview({
+        stageIndices: [12],
+        nodesByStage: WIDE,
+        nodesPerStage: 0,
+        maxTokens: 32000,
+        currentStageIdx: 12,
+        startAfterNodeId: 'w12-2',
+    });
+    assert.equal(preview.sections[0].lines.length, 6, '节点 2 之后还有 6 个');
+});
+
+check('G4 接线：不再单独传当前阶段上限，文案说明「同样取前 N 个」', () => {
+    assert.ok(!indexSrc.includes('currentStageNodesPerStage'), '不该再传当前阶段专用参数');
+    assert.ok(indexSrc.includes('阶段剩下的${nodeLabel}'), '面板文案要写「前 N 个」');
+    assert.ok(templateSrc.includes('当前阶段也算'), '勾选框要保留');
 });
 
 // ---- 汇总 ------------------------------------------------------------------
