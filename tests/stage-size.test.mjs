@@ -41,14 +41,21 @@ check('A8 非法入参不炸', () => {
     assert.deepEqual(niSplitStageSizes(-5, 0, 0), []);
     assert.deepEqual(niSplitStageSizes(6, NaN, NaN), [6]);
 });
-check('A9 切出来的段数不超过阶段数', () => {
-    for (let t = 1; t <= 30; t++) {
-        for (const n of [1, 2, 5, 9]) {
-            const sizes = niSplitStageSizes(t, n, 4);
-            assert.ok(sizes.length <= Math.min(n, t), `${t}/${n} → ${sizes.length}`);
-            assert.equal(sizes.reduce((a, b) => a + b, 0), t, `${t}/${n} 总和`);
+check('A9 任意参数下：总和 == 总数，且每段不超过「每阶段节点数」', () => {
+    for (let t = 1; t <= 40; t++) {
+        for (const n of [0, 1, 2, 5, 9]) {
+            for (const per of [0, 1, 3, 4]) {
+                const sizes = niSplitStageSizes(t, n, per);
+                assert.equal(sizes.reduce((a, b) => a + b, 0), t, `${t}/${n}/${per} 总和`);
+                if (per > 0) assert.ok(sizes.every(v => v <= per), `${t}/${n}/${per} 有超额段 ${sizes}`);
+            }
         }
     }
+});
+
+check('A11 阶段数装不下时按每段数量继续切（不把剩下的全塞最后一段）', () => {
+    assert.deepEqual(niSplitStageSizes(100, 7, 3), Array.from({ length: 33 }, () => 3).concat([1]));
+    assert.equal(niSplitStageSizes(100, 7, 3).length, 34);
 });
 
 check('A10 阶段数留空（0）+ 每段 4 → 按总量算段数', () => {
